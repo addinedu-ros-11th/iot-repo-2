@@ -30,8 +30,8 @@ def get_menu_list(conn) -> list[dict[str, Any]]:
       ...
     ]
     """
-    # TODO
-    raise NotImplementedError("get_menu_list 구현 필요")
+    # DB에서 메뉴 목록을 그대로 조회해서 반환
+    return order_repo.get_menu_list(conn)
 
 
 def create_order(conn, req: models.OrderCreate) -> dict[str, Any]:
@@ -69,8 +69,38 @@ def create_order(conn, req: models.OrderCreate) -> dict[str, Any]:
     예외 처리:
     - order 삽입 후 get_order_by_id 결과가 None 이면 RuntimeError("ORDER_INSERT_FAILED") 발생
     """
-    # TODO
-    raise NotImplementedError("create_order 구현 필요")
+    # 1) 다음 pickup_no 계산
+    pickup_no = order_repo.get_next_pickup_no_for_today(conn)
+
+    # 2) orders INSERT
+    order_id = order_repo.insert_order(
+      conn,
+      pickup_no=pickup_no,
+      rfid_card_id=req.rfid_card_id,
+      status=enums.ORDER_STATUS_PENDING,
+    )
+
+    # 3) order_detail INSERT
+    items = [(item.menu_id, item.qty) for item in req.items]
+    if items:
+      order_repo.insert_order_items(conn, order_id, items)
+
+    # 4) commit
+    conn.commit()
+
+    # 5) 조회
+    row = order_repo.get_order_by_id(conn, order_id)
+    if row is None:
+      raise RuntimeError("ORDER_INSERT_FAILED")
+
+    # 6) 반환 형식
+    ordered_at = row.get("ordered_at")
+    return {
+      "order_id": row["order_id"],
+      "pickup_no": row["pickup_no"],
+      "status": row["status"],
+      "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+    }
 
 
 def get_order_queue(conn) -> list[dict[str, Any]]:
@@ -107,8 +137,32 @@ def get_order_queue(conn) -> list[dict[str, Any]]:
 
     ※ ordered_at 이 None 이 아니면 row["ordered_at"].isoformat() 으로 문자열 변환.
     """
-    # TODO
-    raise NotImplementedError("get_order_queue 구현 필요")
+    rows = order_repo.get_order_queue_with_cook_time(conn)
+
+    result: list[dict[str, Any]] = []
+    accumulated = 0
+    for row in rows:
+      status = row.get("status")
+      cook_time = int(row.get("cook_time_total_sec") or 0)
+
+      if status in (enums.ORDER_STATUS_PENDING, enums.ORDER_STATUS_COOKING):
+        eta_sec = accumulated
+        accumulated += cook_time
+      else:  # DONE or others
+        eta_sec = 0
+
+      ordered_at = row.get("ordered_at")
+      result.append(
+        {
+          "order_id": row.get("order_id"),
+          "pickup_no": row.get("pickup_no"),
+          "status": status,
+          "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+          "eta_sec": int(eta_sec),
+        }
+      )
+
+    return result
 
 
 def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
@@ -137,5 +191,33 @@ def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
         "ordered_at": "<ISO8601 문자열 또는 None>"
       }
     """
-    # TODO
-    raise NotImplementedError("update_order_status 구현 필요")
+    # 1) 현재 주문 조회
+    row = order_repo.get_order_by_id(conn, order_id)
+    if row is None:
+      raise ValueError("ORDER_NOT_FOUND")
+
+    # 2) 허용된 상태 확인 (이 함수는 취소만 처리)
+    if new_status != enums.ORDER_STATUS_CANCELED:
+      raise ValueError("UNSUPPORTED_STATUS_CHANGE")
+
+    # 3) 현재 상태가 PENDING인지 확인
+    current_status = row.get("status")
+    if current_status != enums.ORDER_STATUS_PENDING:
+      raise ValueError("CANNOT_CANCEL_NON_PENDING")
+
+    # 4) 상태 변경
+    affected = order_repo.update_order_status(conn, order_id, new_status)
+    if affected == 0:
+      raise RuntimeError("ORDER_STATUS_UPDATE_FAILED")
+
+    # 5) commit
+    conn.commit()
+
+    # 6) 반환
+    ordered_at = row.get("ordered_at")
+    return {
+      "order_id": row.get("order_id"),
+      "pickup_no": row.get("pickup_no"),
+      "status": new_status,
+      "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+    }
