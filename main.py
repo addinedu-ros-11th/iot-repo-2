@@ -6,16 +6,21 @@
 import sys
 
 from PyQt6.QtWidgets import QApplication
-from ui.kiosk_app import KioskApp
+from ui.admin_screen import AdminScreen
+from ui.order_screen import OrderScreen
 
 
 def main():
     app = QApplication(sys.argv)
 
-    window = KioskApp()
-    window.show()
+    # Open both Admin and Order screens in separate windows
+    admin_win = AdminScreen()
+    admin_win.show()
 
-    sys.exit(app.exec_())
+    order_win = OrderScreen()
+    order_win.show()
+
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
