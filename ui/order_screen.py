@@ -21,7 +21,8 @@ import os
 
 from PyQt6 import uic
 from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem
+import requests
 
 from config import API_BASE_URL
 
@@ -54,7 +55,6 @@ class OrderScreen(QWidget):
         # 실제 구현은 load_menu / load_queue 안에서 작성
         self.load_menu()
         self.load_queue()
-
     def load_menu(self):
         """
         메뉴 목록 로딩.
@@ -72,8 +72,26 @@ class OrderScreen(QWidget):
         5) 에러 발생 시 QMessageBox 로 사용자에게 알림
 
         """
-        # TODO
-        raise NotImplementedError("OrderScreen.load_menu 구현 필요")
+        try:
+            resp = requests.get(f"{API_BASE_URL}/api/menu", timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+
+            self.menuTable.setRowCount(len(data))
+            for i, item in enumerate(data):
+                id_item = QTableWidgetItem(str(item.get("id", "")))
+                name_item = QTableWidgetItem(item.get("name", ""))
+                price_item = QTableWidgetItem(str(item.get("price", "")))
+                qty_item = QTableWidgetItem("0")
+
+                self.menuTable.setItem(i, 0, id_item)
+                self.menuTable.setItem(i, 1, name_item)
+                self.menuTable.setItem(i, 2, price_item)
+                self.menuTable.setItem(i, 3, qty_item)
+
+            self.menuTable.resizeColumnsToContents()
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"메뉴를 불러오지 못했습니다:\n{e}")
 
     def load_queue(self):
         """
@@ -97,8 +115,26 @@ class OrderScreen(QWidget):
            - col3: eta_sec
         4) 에러 발생 시(네트워크 끊김 등) 화면에는 따로 알리지 않고 조용히 무시해도 된다.
         """
-        # TODO
-        raise NotImplementedError("OrderScreen.load_queue 구현 필요")
+        try:
+            resp = requests.get(f"{API_BASE_URL}/api/orders/queue", timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+
+            self.queueTable.setRowCount(len(data))
+            for i, o in enumerate(data):
+                pickup = QTableWidgetItem(str(o.get("pickup_no", "")))
+                status = QTableWidgetItem(str(o.get("status", "")))
+                ordered_at = o.get("ordered_at") or ""
+                ordered_item = QTableWidgetItem(str(ordered_at))
+                eta = QTableWidgetItem(str(o.get("eta_sec", "")))
+
+                self.queueTable.setItem(i, 0, pickup)
+                self.queueTable.setItem(i, 1, status)
+                self.queueTable.setItem(i, 2, ordered_item)
+                self.queueTable.setItem(i, 3, eta)
+        except Exception:
+            # 주기적 갱신 중 에러는 조용히 무시
+            return
 
     def on_click_order(self):
         """
@@ -130,5 +166,42 @@ class OrderScreen(QWidget):
         7) 실패 시:
            - 메시지 박스로 에러 내용 표시
         """
-        # TODO
-        raise NotImplementedError("OrderScreen.on_click_order 구현 필요")
+        rfid = self.txtRfid.text().strip()
+        if not rfid:
+            QMessageBox.warning(self, "알림", "RFID 카드 ID가 없습니다.")
+            return
+
+        items = []
+        row_count = self.menuTable.rowCount()
+        for i in range(row_count):
+            id_item = self.menuTable.item(i, 0)
+            qty_item = self.menuTable.item(i, 3)
+            if id_item is None or qty_item is None:
+                continue
+            try:
+                menu_id = int(id_item.text())
+                qty = int(qty_item.text())
+            except Exception:
+                continue
+            if qty > 0:
+                items.append({"menu_id": menu_id, "qty": qty})
+
+        if not items:
+            QMessageBox.information(self, "알림", "수량이 1 이상인 메뉴가 없습니다.")
+            return
+
+        payload = {"rfid_card_id": rfid, "items": items}
+
+        try:
+            resp = requests.post(f"{API_BASE_URL}/api/orders", json=payload, timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+            pickup_no = data.get("pickup_no")
+            QMessageBox.information(self, "주문 완료", f"주문이 접수되었습니다. 픽업 번호: {pickup_no}")
+
+            # 초기화 및 대기열 갱신
+            for i in range(row_count):
+                self.menuTable.setItem(i, 3, QTableWidgetItem("0"))
+            self.load_queue()
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"주문에 실패했습니다:\n{e}")

@@ -26,7 +26,8 @@ import os
 
 from PyQt6 import uic
 from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem
+import requests
 
 from config import API_BASE_URL
 
@@ -81,8 +82,26 @@ class AdminScreen(QWidget):
         4) self.materialsTable.resizeColumnsToContents() 호출
         5) 실패 시 QMessageBox 로 에러 표시
         """
-        # TODO
-        raise NotImplementedError("AdminScreen.load_materials 구현 필요")
+        try:
+            resp = requests.get(f"{API_BASE_URL}/api/materials", timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+
+            self.materialsTable.setRowCount(len(data))
+            for i, item in enumerate(data):
+                id_item = QTableWidgetItem(str(item.get("id", "")))
+                name_item = QTableWidgetItem(item.get("name", ""))
+                unit_item = QTableWidgetItem(item.get("unit", ""))
+                qty_item = QTableWidgetItem(str(item.get("qty", "")))
+
+                self.materialsTable.setItem(i, 0, id_item)
+                self.materialsTable.setItem(i, 1, name_item)
+                self.materialsTable.setItem(i, 2, unit_item)
+                self.materialsTable.setItem(i, 3, qty_item)
+
+            self.materialsTable.resizeColumnsToContents()
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"재고 목록을 불러오지 못했습니다:\n{e}")
 
     def on_click_restock(self):
         """
@@ -106,8 +125,43 @@ class AdminScreen(QWidget):
            - 이후 self.load_materials() 다시 호출
         7) 실패 시 QMessageBox 로 에러 표시
         """
-        # TODO
-        raise NotImplementedError("AdminScreen.on_click_restock 구현 필요")
+        row = self.materialsTable.currentRow()
+        if row is None or row < 0:
+            QMessageBox.warning(self, "알림", "재고 목록에서 재료를 선택하세요.")
+            return
+
+        id_item = self.materialsTable.item(row, 0)
+        if id_item is None:
+            QMessageBox.warning(self, "알림", "선택한 항목의 ID를 찾을 수 없습니다.")
+            return
+
+        try:
+            material_id = int(id_item.text())
+        except Exception:
+            QMessageBox.warning(self, "알림", "유효한 재료 ID가 아닙니다.")
+            return
+
+        qty_change = int(self.spinQtyChange.value())
+        if qty_change == 0:
+            QMessageBox.information(self, "알림", "변경량이 0입니다.")
+            return
+
+        note_text = self.txtNote.text().strip()
+        note = note_text if note_text != "" else None
+
+        payload = {
+            "tx_type": "RESTOCK" if qty_change > 0 else "ADJUST",
+            "qty_change": qty_change,
+            "note": note,
+        }
+
+        try:
+            resp = requests.post(f"{API_BASE_URL}/api/materials/{material_id}/tx", json=payload, timeout=5)
+            resp.raise_for_status()
+            QMessageBox.information(self, "완료", "재고가 변경되었습니다.")
+            self.load_materials()
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"재고 변경에 실패했습니다:\n{e}")
 
     def load_machine_status(self):
         """
@@ -141,5 +195,35 @@ class AdminScreen(QWidget):
            - col6: last_heartbeat_at 문자열 (없으면 빈 문자열)
         4) 실패 시 조용히 무시하거나, 필요하면 메시지 박스로 알려도 된다.
         """
-        # TODO
-        raise NotImplementedError("AdminScreen.load_machine_status 구현 필요")
+        try:
+            resp = requests.get(f"{API_BASE_URL}/api/machine/status", timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+
+            self.machineTable.setRowCount(len(data))
+            for i, row in enumerate(data):
+                name = row.get("name", "")
+                state = row.get("state", "")
+                error = row.get("error_code", "")
+
+                plate1_state = row.get("plate1_state", "")
+                plate1_temp = row.get("plate1_temp")
+                plate1 = f"{plate1_state}/{plate1_temp}" if plate1_temp is not None else plate1_state
+
+                plate2_state = row.get("plate2_state", "")
+                plate2_temp = row.get("plate2_temp")
+                plate2 = f"{plate2_state}/{plate2_temp}" if plate2_temp is not None else plate2_state
+
+                conveyor = row.get("conveyor_state", "")
+                last_hb = row.get("last_heartbeat_at") or ""
+
+                self.machineTable.setItem(i, 0, QTableWidgetItem(str(name)))
+                self.machineTable.setItem(i, 1, QTableWidgetItem(str(state)))
+                self.machineTable.setItem(i, 2, QTableWidgetItem(str(error)))
+                self.machineTable.setItem(i, 3, QTableWidgetItem(str(plate1)))
+                self.machineTable.setItem(i, 4, QTableWidgetItem(str(plate2)))
+                self.machineTable.setItem(i, 5, QTableWidgetItem(str(conveyor)))
+                self.machineTable.setItem(i, 6, QTableWidgetItem(str(last_hb)))
+        except Exception:
+            # 조용히 무시 (UI 주기 갱신 중 에러가 발생해도 사용자에게 계속 방해하지 않음)
+            return
