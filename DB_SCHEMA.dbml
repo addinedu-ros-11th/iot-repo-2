@@ -1,0 +1,100 @@
+```dbml
+Table menu {
+  id int [pk, increment]
+  code varchar(20) [not null, unique] // 'RED_BEAN', 'CREAM', 'PIZZA' 등
+  name varchar(20) [not null]         // 화면 표시 메뉴명
+  price int [not null]                // 개당 가격
+  cook_time_sec int [not null]        // 1회 굽는 시간(초)
+}
+
+Table orders {
+  id bigint [pk, increment]
+  pickup_no int [not null]                      // 픽업 번호
+  rfid_card_id varchar(100) [not null]          // RFID 카드 ID
+  status varchar(20) [not null, note: 'PENDING | COOKING | DONE | PICKED_UP | CANCELED']
+  ordered_at datetime [not null]                // 주문 시각
+  indexes {
+    (status, ordered_at)
+  }
+}
+
+Table order_detail {
+  id bigint [pk, increment]
+  order_id bigint [not null, ref: > orders.id]
+  menu_id int [not null, ref: > menu.id]
+  qty int [not null]
+  indexes {
+    order_id
+  }
+}
+
+Table material_stock {
+  id int [pk, increment]
+  name varchar(30) [not null, unique]   // '반죽', '팥', '슈크림', '피자소스' 등
+  unit varchar(20) [not null]           // 'g', 'ml', '개' 등
+  qty int [not null, default: 0]        // 현재 재고량
+}
+
+Table material_recipe {
+  id int [pk, increment]
+  menu_id int [not null, ref: > menu.id]              // 어떤 메뉴인지
+  material_id int [not null, ref: > material_stock.id]// 어떤 재료인지
+  use_per_one int [not null]                          // 1개당 사용량 (unit 기준)
+  indexes {
+    (menu_id, material_id) [unique]
+  }
+}
+
+Table material_tx {
+  id bigint [pk, increment]
+  material_id int [not null, ref: > material_stock.id]   // 어떤 재료인지
+  order_id bigint [ref: > orders.id]                     // 주문으로 인한 소진이면 주문ID, 아니면 NULL
+  tx_type varchar(20) [not null, note: 'RESTOCK | CONSUME | ADJUST']  
+  qty_change int [not null]                              // +면 입고, -면 소진
+  note varchar(200)                                      // 선택: 메모 ("초기 보충", "order #10" 등)
+  created_at datetime [not null]
+}
+
+Table machine_status {
+  id int [pk, increment]
+  name varchar(20) [not null, unique] // 'MAIN_MACHINE', 'MACHINE_1' 등
+
+  // 전체 머신 상태
+  state varchar(20) [not null, note: 'IDLE | RUNNING | ERROR | EMERGENCY_STOP']
+  current_order_id bigint [ref: > orders.id] // 현재 처리 중인 주문 (없으면 null)
+  last_heartbeat_at datetime                 // 아두이노가 마지막으로 살아있다고 신호 보낸 시간
+
+  // plate1 상태
+  plate1_state varchar(20) [not null, note: 'IDLE | BAKING | DUMPING | ERROR']
+  plate1_temp int                             // plate1 현재 온도(℃)
+  plate1_sensor_status varchar(20) [not null, default: 'OK', note: 'OK | DISCONNECTED | OUT_OF_RANGE | STUCK']
+
+  // plate2 상태
+  plate2_state varchar(20) [not null, note: 'IDLE | BAKING | DUMPING | ERROR']
+  plate2_temp int                             // plate2 현재 온도(℃)
+  plate2_sensor_status varchar(20) [not null, default: 'OK', note: 'OK | DISCONNECTED | OUT_OF_RANGE | STUCK']
+
+  // 컨베이어 & 픽업대 센서 상태
+  conveyor_state varchar(20) [not null, note: 'IDLE | MOVING | ERROR']
+  tcrt_status varchar(20) [not null, default: 'OK', note: 'OK | ERROR | STUCK']
+  ultrasonic_status varchar(20) [not null, default: 'OK', note: 'OK | ERROR | STUCK']
+
+  // 전체 에러 요약
+  error_code varchar(20) [not null, default: 'NONE', note: 'NONE | OVERHEAT | SENSOR_ERROR | BELT_ERROR']
+}
+
+Table machine_event {
+  id bigint [pk, increment]
+  machine_id int [not null, ref: > machine_status.id]
+
+  order_id bigint [ref: > orders.id]     // 주문과 관련되면 채움, 아니면 null
+
+  component varchar(20) [not null, note: 'MACHINE | PLATE1 | PLATE2 | CONVEYOR | SENSOR']
+  event_type varchar(20) [not null, note: 'STATE | SAFETY | PICKUP | ERROR']
+  event_code varchar(30) [not null, note: 'ORDER_STARTED | ORDER_DONE | PICKUP_DETECTED | OVERHEAT | EMERGENCY_STOP | TEMP_SENSOR_FAIL | TCRT_FAIL | ULTRASONIC_FAIL']
+
+  temp int                 // 온도 관련이면 값, 아니면 null
+  message varchar(200)     // 디버깅용 설명 (선택)
+
+  created_at datetime [not null] // 이벤트 발생/수신 시각
+}
