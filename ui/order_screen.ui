@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>OrderScreen</class>
+ <widget class="QWidget" name="OrderScreen">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1000</width>
+    <height>700</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>손님 주문 화면</string>
+  </property>
+  <layout class="QHBoxLayout" name="horizontalLayout_main">
+   <item>
+    <layout class="QVBoxLayout" name="verticalLayout_left">
+     <item>
+      <widget class="QGroupBox" name="groupBox_menu">
+       <property name="title">
+        <string>메뉴 목록</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_menu">
+        <item>
+         <widget class="QTableWidget" name="menuTable">
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SingleSelection</enum>
+          </property>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectItems</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnReloadMenu">
+          <property name="text">
+           <string>메뉴 새로고침</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="groupBox_order">
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>100</height>
+        </size>
+       </property>
+       <property name="title">
+        <string>주문 결제</string>
+       </property>
+       <layout class="QHBoxLayout" name="horizontalLayout_order">
+        <item>
+         <widget class="QLabel" name="label_rfid">
+          <property name="text">
+           <string>RFID 카드:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="txtRfid">
+          <property name="placeholderText">
+           <string>카드를 스캔하거나 ID를 입력하세요</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnOrder">
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="font">
+           <font>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>주문 하기</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_queue">
+     <property name="title">
+      <string>실시간 대기열</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_queue">
+      <item>
+       <widget class="QTableWidget" name="queueTable">
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+        <property name="selectionMode">
+         <enum>QAbstractItemView::NoSelection</enum>
+        </property>
+        <property name="selectionBehavior">
+         <enum>QAbstractItemView::SelectRows</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
