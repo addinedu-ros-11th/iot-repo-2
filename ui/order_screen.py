@@ -40,6 +40,25 @@ class OrderScreen(QWidget):
         self.menuTable.setHorizontalHeaderLabels(["ID", "메뉴명", "가격", "수량"])
         self.menuTable.setColumnHidden(0, True)
 
+        # 장바구니 구조 초기화
+        # cart is a dict: menu_id -> {"menu_id":..., "name":..., "price":..., "qty":...}
+        self.cart: dict[int, dict] = {}
+        # cartTable may not exist in older UI; ensure presence
+        if hasattr(self, "cartTable"):
+            self.cartTable.setColumnCount(4)
+            self.cartTable.setHorizontalHeaderLabels(["메뉴명", "단가", "수량", "합계"])
+
+        # total label and buttons may be present from .ui
+        if hasattr(self, "btnAddToCart"):
+            self.btnAddToCart.clicked.connect(self.on_click_add_to_cart)
+        if hasattr(self, "btnClearCart"):
+            self.btnClearCart.clicked.connect(self.on_click_clear_cart)
+        # ensure order button disabled when cart empty
+        try:
+            self.btnOrder.setEnabled(False)
+        except Exception:
+            pass
+
         # 대기열 테이블 기본 설정
         self.queueTable.setColumnCount(4)
         self.queueTable.setHorizontalHeaderLabels(["픽업번호", "상태", "주문시각", "ETA(초)"])
@@ -174,23 +193,18 @@ class OrderScreen(QWidget):
             QMessageBox.warning(self, "알림", "RFID 카드 ID가 없습니다.")
             return
 
+        # Use cart contents for ordering (cart -> menu_id, qty)
         items = []
-        row_count = self.menuTable.rowCount()
-        for i in range(row_count):
-            id_item = self.menuTable.item(i, 0)
-            qty_item = self.menuTable.item(i, 3)
-            if id_item is None or qty_item is None:
-                continue
+        for menu_id, it in self.cart.items():
             try:
-                menu_id = int(id_item.text())
-                qty = int(qty_item.text())
+                qty = int(it.get("qty", 0))
             except Exception:
-                continue
+                qty = 0
             if qty > 0:
-                items.append({"menu_id": menu_id, "qty": qty})
+                items.append({"menu_id": int(menu_id), "qty": qty})
 
         if not items:
-            QMessageBox.information(self, "알림", "수량이 1 이상인 메뉴가 없습니다.")
+            QMessageBox.information(self, "알림", "장바구니가 비어 있습니다. 먼저 장바구니에 담아주세요.")
             return
 
         payload = {"rfid_card_id": rfid, "items": items}
@@ -203,8 +217,15 @@ class OrderScreen(QWidget):
             QMessageBox.information(self, "주문 완료", f"주문이 접수되었습니다. 픽업 번호: {pickup_no}")
 
             # 초기화 및 대기열 갱신
+            # reset menuTable quantities to 0
+            row_count = self.menuTable.rowCount()
             for i in range(row_count):
                 self.menuTable.setItem(i, 3, QTableWidgetItem("0"))
+            # clear cart after successful order
+            try:
+                self.on_click_clear_cart()
+            except Exception:
+                pass
             self.load_queue()
             # notify other windows (e.g., AdminScreen) to refresh materials
             try:
@@ -236,4 +257,83 @@ class OrderScreen(QWidget):
             self.load_queue()
         except Exception as e:
             QMessageBox.critical(self, "오류", f"대기열 초기화에 실패했습니다:\n{e}")
+
+    def on_click_add_to_cart(self):
+        """Collect menu rows with qty>0 and add to cart, then update cartTable and total.
+
+        After adding, reset the menuTable qty cell to 0 for those rows.
+        """
+        row_count = self.menuTable.rowCount()
+        added = False
+        for i in range(row_count):
+            id_item = self.menuTable.item(i, 0)
+            name_item = self.menuTable.item(i, 1)
+            price_item = self.menuTable.item(i, 2)
+            qty_item = self.menuTable.item(i, 3)
+            if id_item is None or qty_item is None:
+                continue
+            try:
+                menu_id = int(id_item.text())
+                qty = int(qty_item.text())
+                price = int(price_item.text())
+                name = name_item.text()
+            except Exception:
+                continue
+            if qty <= 0:
+                continue
+            # merge into cart
+            if menu_id in self.cart:
+                self.cart[menu_id]["qty"] += qty
+            else:
+                self.cart[menu_id] = {"menu_id": menu_id, "name": name, "price": price, "qty": qty}
+            # reset menu qty to 0
+            self.menuTable.setItem(i, 3, QTableWidgetItem("0"))
+            added = True
+
+        if not added:
+            QMessageBox.information(self, "알림", "장바구니에 담을 메뉴가 없습니다 (수량을 1 이상 입력하세요).")
+            return
+
+        self._refresh_cart_ui()
+
+    def on_click_clear_cart(self):
+        """Empty the cart and refresh UI."""
+        self.cart.clear()
+        # clear cartTable rows
+        if hasattr(self, "cartTable"):
+            self.cartTable.setRowCount(0)
+        # update total and disable order button
+        try:
+            if hasattr(self, "lblTotal"):
+                self.lblTotal.setText("총합: 0")
+            self.btnOrder.setEnabled(False)
+        except Exception:
+            pass
+
+    def _refresh_cart_ui(self):
+        """Rebuild cartTable from self.cart and update total and order button state."""
+        if not hasattr(self, "cartTable"):
+            return
+        items = list(self.cart.values())
+        self.cartTable.setRowCount(len(items))
+        total = 0
+        for i, it in enumerate(items):
+            name_i = QTableWidgetItem(str(it.get("name", "")))
+            price_i = QTableWidgetItem(str(it.get("price", 0)))
+            qty_i = QTableWidgetItem(str(it.get("qty", 0)))
+            subtotal = int(it.get("price", 0)) * int(it.get("qty", 0))
+            total += subtotal
+            subtotal_i = QTableWidgetItem(str(subtotal))
+            self.cartTable.setItem(i, 0, name_i)
+            self.cartTable.setItem(i, 1, price_i)
+            self.cartTable.setItem(i, 2, qty_i)
+            self.cartTable.setItem(i, 3, subtotal_i)
+
+        # update total label and enable order button if not empty
+        try:
+            if hasattr(self, "lblTotal"):
+                self.lblTotal.setText(f"총합: {total}")
+            self.btnOrder.setEnabled(total > 0)
+        except Exception:
+            pass
 

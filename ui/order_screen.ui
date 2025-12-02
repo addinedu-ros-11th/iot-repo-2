@@ -42,8 +42,65 @@
        </layout>
       </widget>
      </item>
-     <item>
-      <widget class="QGroupBox" name="groupBox_order">
+    <item>
+     <widget class="QGroupBox" name="groupBox_cart">
+      <property name="title">
+       <string>장바구니</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_cart">
+       <item>
+        <widget class="QTableWidget" name="cartTable">
+        <property name="selectionMode">
+         <enum>QAbstractItemView::SingleSelection</enum>
+        </property>
+        <property name="selectionBehavior">
+         <enum>QAbstractItemView::SelectRows</enum>
+        </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_cart_control">
+        <item>
+         <widget class="QPushButton" name="btnAddToCart">
+          <property name="text">
+           <string>장바구니에 담기</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnClearCart">
+          <property name="text">
+           <string>장바구니 비우기</string>
+          </property>
+         </widget>
+        </item>
+          <item>
+           <spacer name="horizontalSpacer_cart">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+        <item>
+         <widget class="QLabel" name="lblTotal">
+          <property name="text">
+           <string>총합: 0</string>
+          </property>
+         </widget>
+        </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="groupBox_order">
        <property name="maximumSize">
         <size>
          <width>16777215</width>
