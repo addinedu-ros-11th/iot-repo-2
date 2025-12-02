@@ -58,6 +58,15 @@ def api_update_order_status(order_id: int, req: models.OrderStatusUpdate, db=Dep
     return order_service.update_order_status(db, order_id, req.status)
 
 
+# [추가됨] 대기열 초기화 엔드포인트
+@app.delete("/api/orders/queue")
+def api_reset_order_queue(db=Depends(get_db)):
+    """
+    대기열의 모든 주문을 삭제하거나 초기화합니다.
+    """
+    return order_service.reset_order_queue(db)
+
+
 # ===== 재고 / 레시피 =====
 
 @app.get("/api/materials")

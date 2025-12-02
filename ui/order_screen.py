@@ -55,6 +55,7 @@ class OrderScreen(QWidget):
         # 실제 구현은 load_menu / load_queue 안에서 작성
         self.load_menu()
         self.load_queue()
+        # Note: Reset control resides in AdminScreen; OrderScreen refreshes via Admin signal.
     def load_menu(self):
         """
         메뉴 목록 로딩.
@@ -205,3 +206,27 @@ class OrderScreen(QWidget):
             self.load_queue()
         except Exception as e:
             QMessageBox.critical(self, "오류", f"주문에 실패했습니다:\n{e}")
+
+    def on_click_reset_queue(self):
+        """OrderScreen에서 대기열 초기화 버튼 핸들러 (관리자와 동일하게 동작)
+        확인 후 DELETE /api/orders/queue 호출
+        """
+        reply = QMessageBox.question(
+            self,
+            "대기열 초기화",
+            "대기열을 초기화하시겠습니까? 삭제된 주문은 복구할 수 없습니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            resp = requests.delete(f"{API_BASE_URL}/api/orders/queue", timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            deleted = data.get("deleted_orders")
+            QMessageBox.information(self, "완료", f"대기열이 초기화되었습니다. 삭제된 주문: {deleted}")
+            self.load_queue()
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"대기열 초기화에 실패했습니다:\n{e}")
+

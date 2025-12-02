@@ -221,3 +221,12 @@ def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
       "status": new_status,
       "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
     }
+
+
+def reset_order_queue(conn) -> dict[str, Any]:
+    """
+    대기열 초기화: DB에서 PENDING/COOKING/DONE 상태의 주문(및 상세)을 제거하고 삭제된 수를 반환.
+    """
+    deleted = order_repo.reset_order_queue(conn)
+    conn.commit()
+    return {"deleted_orders": int(deleted)}

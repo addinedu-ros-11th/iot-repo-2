@@ -19,6 +19,11 @@ def main():
 
     order_win = OrderScreen()
     order_win.show()
+    # connect admin reset signal to order screen reload so both stay in sync
+    try:
+        admin_win.queue_reset.connect(order_win.load_queue)
+    except Exception:
+        pass
 
     sys.exit(app.exec())
 

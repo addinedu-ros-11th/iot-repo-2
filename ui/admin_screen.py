@@ -25,14 +25,23 @@ API:
 import os
 
 from PyQt6 import uic
-from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem
+from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtWidgets import (
+    QWidget,
+    QMessageBox,
+    QTableWidgetItem,
+    QTableWidget,
+    QGroupBox,
+    QVBoxLayout,
+)
 import requests
 
 from config import API_BASE_URL
 
 
 class AdminScreen(QWidget):
+    # Signal emitted when the queue is reset so other windows can react
+    queue_reset = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "admin_screen.ui")
@@ -59,9 +68,37 @@ class AdminScreen(QWidget):
         self.machine_timer.timeout.connect(self.load_machine_status)
         self.machine_timer.start(3000)
 
+        # 실시간 대기열 테이블 (OrderScreen과 동일한 컬럼)
+        # Ensure queueTable exists (UI might be missing it). If missing, create and append to main layout.
+        if not hasattr(self, "queueTable") or self.queueTable is None:
+            gb = QGroupBox("실시간 대기열")
+            gb_layout = QVBoxLayout()
+            qt = QTableWidget()
+            qt.setObjectName("queueTable")
+            gb_layout.addWidget(qt)
+            gb.setLayout(gb_layout)
+            # add to the main layout if available
+            main_layout = self.layout()
+            if main_layout is not None:
+                main_layout.addWidget(gb)
+            self.queueTable = qt
+
+        self.queueTable.setColumnCount(4)
+        self.queueTable.setHorizontalHeaderLabels(["픽업번호", "상태", "주문시각", "ETA(초)"])
+
+        # 대기열 주기적 갱신 타이머 (3초)
+        self.queue_timer = QTimer(self)
+        self.queue_timer.timeout.connect(self.load_queue)
+        self.queue_timer.start(3000)
+
+        # reset button connection (may come from .ui)
+        if hasattr(self, "btnResetQueue"):
+            self.btnResetQueue.clicked.connect(self.on_click_reset_queue)
+
         # 초기 로딩
         self.load_materials()
         self.load_machine_status()
+        self.load_queue()
 
     def load_materials(self):
         """
@@ -227,3 +264,59 @@ class AdminScreen(QWidget):
         except Exception:
             # 조용히 무시 (UI 주기 갱신 중 에러가 발생해도 사용자에게 계속 방해하지 않음)
             return
+
+    def load_queue(self):
+        """
+        관리자 화면용 실시간 대기열 로딩 (order_screen과 동일 동작).
+        GET {API_BASE_URL}/api/orders/queue
+        응답 각 row: { pickup_no, status, ordered_at, eta_sec }
+        실패 시 조용히 무시.
+        """
+        try:
+            resp = requests.get(f"{API_BASE_URL}/api/orders/queue", timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+
+            self.queueTable.setRowCount(len(data))
+            for i, o in enumerate(data):
+                pickup = QTableWidgetItem(str(o.get("pickup_no", "")))
+                status = QTableWidgetItem(str(o.get("status", "")))
+                ordered_at = o.get("ordered_at") or ""
+                ordered_item = QTableWidgetItem(str(ordered_at))
+                eta = QTableWidgetItem(str(o.get("eta_sec", "")))
+
+                self.queueTable.setItem(i, 0, pickup)
+                self.queueTable.setItem(i, 1, status)
+                self.queueTable.setItem(i, 2, ordered_item)
+                self.queueTable.setItem(i, 3, eta)
+        except Exception:
+            # 주기적 갱신 중 에러는 조용히 무시
+            return
+    def on_click_reset_queue(self):
+        """관리자 UI에서 대기열 초기화 버튼 핸들러
+        확인 대화상자 후 DELETE /api/orders/queue 호출하고 결과를 알림
+        """
+        reply = QMessageBox.question(
+            self,
+            "대기열 초기화",
+            "대기열을 초기화하시겠습니까? 삭제된 주문은 복구할 수 없습니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            resp = requests.delete(f"{API_BASE_URL}/api/orders/queue", timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            deleted = data.get("deleted_orders")
+            QMessageBox.information(self, "완료", f"대기열이 초기화되었습니다. 삭제된 주문: {deleted}")
+            # reload local view
+            self.load_queue()
+            # notify other components (e.g., OrderScreen) to refresh
+            try:
+                self.queue_reset.emit()
+            except Exception:
+                pass
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"대기열 초기화에 실패했습니다:\n{e}")

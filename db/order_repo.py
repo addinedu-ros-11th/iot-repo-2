@@ -133,3 +133,36 @@ def update_order_status(conn, order_id: int, new_status: str) -> int:
     with conn.cursor() as cur:
         cur.execute(sql, (new_status, order_id))
         return cur.rowcount
+
+
+def reset_order_queue(conn) -> int:
+    """
+    대기열(미완료) 주문들을 삭제한다.
+    - 대상 상태: PENDING, COOKING, DONE
+    - order_detail 먼저 삭제한 후 orders 삭제
+    반환값: 삭제된 orders 수
+    """
+    # 먼저 대상 주문 id 리스트 조회
+    sql_select = """
+    SELECT id FROM orders
+    WHERE status IN ('PENDING', 'COOKING', 'DONE')
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql_select)
+        rows = cur.fetchall()
+        ids = [r["id"] if isinstance(r, dict) and "id" in r else (r[0] if isinstance(r, (list, tuple)) else None) for r in rows]
+
+        if not ids:
+            return 0
+
+        # delete order_detail entries
+        placeholders = ",".join(["%s"] * len(ids))
+        sql_delete_details = f"DELETE FROM order_detail WHERE order_id IN ({placeholders})"
+        cur.execute(sql_delete_details, ids)
+
+        # delete orders
+        sql_delete_orders = f"DELETE FROM orders WHERE id IN ({placeholders})"
+        cur.execute(sql_delete_orders, ids)
+        deleted = cur.rowcount
+
+    return deleted
