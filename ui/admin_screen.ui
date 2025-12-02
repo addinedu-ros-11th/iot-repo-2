@@ -200,6 +200,20 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="btnEmergencyStop">
+          <property name="text">
+           <string>비상정지</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnRestartMachine">
+          <property name="text">
+           <string>재가동</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
      </layout>

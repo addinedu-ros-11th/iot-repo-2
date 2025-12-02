@@ -64,6 +64,21 @@ class AdminScreen(QWidget):
         self.btnReloadMaterials.clicked.connect(self.load_materials)
         self.btnRestock.clicked.connect(self.on_click_restock)
         self.btnReloadMachine.clicked.connect(self.load_machine_status)
+        # Emergency stop / Restart buttons (UI-only handlers)
+        if hasattr(self, "btnEmergencyStop"):
+            self.btnEmergencyStop.clicked.connect(self.on_click_emergency_stop)
+            try:
+                # red button for emergency
+                self.btnEmergencyStop.setStyleSheet("background-color: #d9534f; color: white; font-weight: bold;")
+            except Exception:
+                pass
+        if hasattr(self, "btnRestartMachine"):
+            self.btnRestartMachine.clicked.connect(self.on_click_restart_machine)
+            try:
+                # blue button for restart
+                self.btnRestartMachine.setStyleSheet("background-color: #337ab7; color: white; font-weight: bold;")
+            except Exception:
+                pass
 
         # 머신 상태 주기적 갱신 타이머 (3초)
         self.machine_timer = QTimer(self)
@@ -529,3 +544,11 @@ class AdminScreen(QWidget):
                 pass
         except Exception as e:
             QMessageBox.critical(self, "오류", f"주문 취소에 실패했습니다:\n{e}")
+
+    def on_click_emergency_stop(self):
+        """Show a warning indicating emergency stop was triggered. Actual emergency logic is left unimplemented."""
+        QMessageBox.warning(self, "비상정지", "비상정지가 실행되었습니다. (기능 미구현)")
+
+    def on_click_restart_machine(self):
+        """Show an alert indicating a restart was triggered. Actual restart logic is left unimplemented."""
+        QMessageBox.information(self, "재가동", "머신 재가동이 실행되었습니다. (기능 미구현)")
