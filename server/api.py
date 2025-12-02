@@ -10,6 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from db.db_conn import get_conn
 from server import order_service, inventory_service, machine_service, models
+from db import order_repo
+from fastapi import HTTPException
+from common import enums
 
 app = FastAPI()
 
@@ -56,6 +59,29 @@ def api_get_order_queue(db=Depends(get_db)):
 @app.patch("/api/orders/{order_id}/status")
 def api_update_order_status(order_id: int, req: models.OrderStatusUpdate, db=Depends(get_db)):
     return order_service.update_order_status(db, order_id, req.status)
+
+
+@app.patch("/api/admin/orders/{order_id}/status")
+def api_admin_update_order_status(order_id: int, req: models.OrderStatusUpdate, db=Depends(get_db)):
+    """관리자 전용: 주문 상태를 강제로 변경합니다.
+
+    - CANCELED 는 기존의 취소 로직을 사용합니다 (재고 복구 등).
+    - 그 외 상태는 레포지토리를 직접 호출하여 강제 변경합니다.
+    """
+    if req.status == enums.ORDER_STATUS_CANCELED:
+        return order_service.update_order_status(db, order_id, req.status)
+
+    affected = order_repo.update_order_status(db, order_id, req.status)
+    if affected == 0:
+        raise HTTPException(status_code=400, detail="ORDER_STATUS_UPDATE_FAILED")
+    db.commit()
+    row = order_repo.get_order_by_id(db, order_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="ORDER_NOT_FOUND")
+    ordered_at = row.get("ordered_at")
+    if ordered_at is not None:
+        row["ordered_at"] = ordered_at.isoformat()
+    return row
 
 
 # [추가됨] 대기열 초기화 엔드포인트

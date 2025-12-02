@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QVBoxLayout,
     QHeaderView,
+    QComboBox,
 )
 import requests
 
@@ -314,7 +315,7 @@ class AdminScreen(QWidget):
             self.queueTable.setRowCount(len(data))
             for i, o in enumerate(data):
                 pickup = QTableWidgetItem(str(o.get("pickup_no", "")))
-                status = QTableWidgetItem(str(o.get("status", "")))
+                status_text = str(o.get("status", ""))
                 ordered_at = o.get("ordered_at") or ""
                 ordered_item = QTableWidgetItem(str(ordered_at))
                 eta = QTableWidgetItem(str(o.get("eta_sec", "")))
@@ -322,7 +323,33 @@ class AdminScreen(QWidget):
                 id_item = QTableWidgetItem(str(o.get("order_id", "")))
                 self.queueTable.setItem(i, 0, id_item)
                 self.queueTable.setItem(i, 1, pickup)
-                self.queueTable.setItem(i, 2, status)
+
+                # create a combobox for status to allow inline editing
+                try:
+                    combo = QComboBox()
+                    statuses = ["PENDING", "COOKING", "DONE", "PICKED_UP", "CANCELED"]
+                    combo.addItems(statuses)
+                    # set current without emitting signals
+                    combo.blockSignals(True)
+                    if status_text in statuses:
+                        combo.setCurrentText(status_text)
+                    else:
+                        combo.addItem(status_text)
+                        combo.setCurrentText(status_text)
+                    combo.setProperty("prev", status_text)
+                    # store order id for handler
+                    try:
+                        combo.setProperty("order_id", int(o.get("order_id") or 0))
+                    except Exception:
+                        combo.setProperty("order_id", 0)
+                    combo.blockSignals(False)
+                    # connect handler
+                    combo.currentTextChanged.connect(lambda new, c=combo: self.on_status_combo_changed(c, new))
+                    self.queueTable.setCellWidget(i, 2, combo)
+                except Exception:
+                    # fallback to plain item if combobox fails
+                    self.queueTable.setItem(i, 2, QTableWidgetItem(status_text))
+
                 self.queueTable.setItem(i, 3, ordered_item)
                 self.queueTable.setItem(i, 4, eta)
         except Exception:
@@ -391,6 +418,52 @@ class AdminScreen(QWidget):
             # ignore periodic UI errors
             return
 
+    def on_status_combo_changed(self, combo, new_status: str):
+        """Handle inline status change from combobox in the queue table.
+
+        If change fails, revert the combobox to previous value.
+        """
+        try:
+            order_id = int(combo.property("order_id") or 0)
+        except Exception:
+            QMessageBox.warning(self, "오류", "주문 ID를 읽을 수 없습니다.")
+            return
+
+        prev = combo.property("prev") or ""
+        if new_status == prev:
+            return
+
+        try:
+            resp = requests.patch(f"{API_BASE_URL}/api/admin/orders/{order_id}/status", json={"status": new_status}, timeout=10)
+            resp.raise_for_status()
+            # success: update prev and refresh related views
+            combo.setProperty("prev", new_status)
+            try:
+                self.load_queue()
+            except Exception:
+                pass
+            try:
+                self.load_materials()
+            except Exception:
+                pass
+            try:
+                self.load_material_tx()
+            except Exception:
+                pass
+            try:
+                self.queue_reset.emit()
+            except Exception:
+                pass
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"상태 변경에 실패했습니다:\n{e}")
+            # revert selection
+            try:
+                combo.blockSignals(True)
+                combo.setCurrentText(prev)
+                combo.blockSignals(False)
+            except Exception:
+                pass
+
     def on_click_cancel_selected(self):
         """Cancel (set CANCELED) the selected order in the queue (only allowed for PENDING)."""
         row = self.queueTable.currentRow()
@@ -411,7 +484,16 @@ class AdminScreen(QWidget):
             QMessageBox.warning(self, "알림", "유효한 주문 ID가 아닙니다.")
             return
 
-        status = status_item.text() if status_item is not None else ""
+        # status might be a QTableWidgetItem (old) or a QComboBox (new)
+        status = ""
+        try:
+            status_widget = self.queueTable.cellWidget(row, 2)
+            if status_widget is not None and hasattr(status_widget, "currentText"):
+                status = status_widget.currentText()
+            else:
+                status = status_item.text() if status_item is not None else ""
+        except Exception:
+            status = status_item.text() if status_item is not None else ""
         if status != "PENDING":
             QMessageBox.information(self, "알림", "선택한 주문은 취소할 수 없습니다 (PENDING 상태만 취소 가능).")
             return
