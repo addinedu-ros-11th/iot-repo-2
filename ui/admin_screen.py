@@ -368,6 +368,11 @@ class AdminScreen(QWidget):
             QMessageBox.information(self, "완료", "주문이 취소되었습니다.")
             # refresh local queue view and notify others
             self.load_queue()
+            # refresh material stock view so restored quantities are visible
+            try:
+                self.load_materials()
+            except Exception:
+                pass
             try:
                 self.queue_reset.emit()
             except Exception:

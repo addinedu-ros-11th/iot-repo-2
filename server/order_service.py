@@ -239,15 +239,44 @@ def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
     if current_status != enums.ORDER_STATUS_PENDING:
       raise ValueError("CANNOT_CANCEL_NON_PENDING")
 
-    # 4) 상태 변경
+    # 4) 환불(재고 복구): 주문의 order_detail을 읽어 각 메뉴별 수량에 따라
+    #    material_recipe를 참고해 material별 복구 수량을 계산하고 재고를 증가시킨다.
+    #    모든 작업은 같은 트랜잭션에서 일어나므로 실패 시 롤백된다.
+    if new_status == enums.ORDER_STATUS_CANCELED:
+      # fetch ordered items
+      items = order_repo.get_order_items(conn, order_id)
+      # aggregate material usage
+      material_usage: dict[int, int] = {}
+      for it in items:
+        menu_id = int(it.get("menu_id") or 0)
+        qty = int(it.get("qty") or 0)
+        if qty <= 0:
+          continue
+        recipe_rows = inventory_repo.get_recipe_by_menu(conn, menu_id)
+        for r in recipe_rows:
+          mid = int(r.get("material_id"))
+          use_per_one = int(r.get("use_per_one") or 0)
+          total_use = use_per_one * qty
+          if total_use == 0:
+            continue
+          material_usage[mid] = material_usage.get(mid, 0) + total_use
+
+      # apply restock for each material (positive qty_change)
+      for material_id, total in material_usage.items():
+        qty_change = int(total)
+        note = f"CancelOrder:{order_id}"
+        inventory_repo.insert_material_tx(conn, material_id, "RESTOCK", qty_change, note)
+        inventory_repo.update_material_stock(conn, material_id, qty_change)
+
+    # 5) 상태 변경
     affected = order_repo.update_order_status(conn, order_id, new_status)
     if affected == 0:
       raise RuntimeError("ORDER_STATUS_UPDATE_FAILED")
 
-    # 5) commit
+    # 6) commit
     conn.commit()
 
-    # 6) 반환
+    # 7) 반환
     ordered_at = row.get("ordered_at")
     return {
       "order_id": row.get("order_id"),

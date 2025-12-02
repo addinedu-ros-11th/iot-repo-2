@@ -95,6 +95,29 @@ def get_order_by_id(conn, order_id: int) -> dict | None:
     return row
 
 
+def get_order_items(conn, order_id: int) -> list[dict[str, Any]]:
+    """
+    주어진 order_id의 order_detail 항목들을 반환.
+    각각의 row는 {'menu_id': int, 'qty': int} 형태를 가짐.
+    """
+    sql = """
+    SELECT menu_id, qty
+    FROM order_detail
+    WHERE order_id = %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (order_id,))
+        rows = cur.fetchall()
+    # normalize to dicts with keys menu_id and qty
+    result = []
+    for r in rows:
+        if isinstance(r, dict):
+            result.append({"menu_id": r.get("menu_id"), "qty": r.get("qty")})
+        else:
+            result.append({"menu_id": r[0], "qty": r[1]})
+    return result
+
+
 def get_order_queue_with_cook_time(conn) -> list[dict[str, Any]]:
     """
     대기열/진행중/완료(픽업 전) 주문의 총 조리시간까지 함께 조회.
