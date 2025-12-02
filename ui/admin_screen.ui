@@ -14,12 +14,15 @@
    <string>관리자 화면</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_main">
+
+   <!-- 재고 관리 -->
    <item>
     <widget class="QGroupBox" name="groupBox_materials">
      <property name="title">
       <string>재고 관리</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_materials">
+
       <item>
        <widget class="QTableWidget" name="materialsTable">
         <property name="editTriggers">
@@ -33,6 +36,7 @@
         </property>
        </widget>
       </item>
+
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_materials_control">
         <item>
@@ -101,9 +105,60 @@
         </item>
        </layout>
       </item>
+
+      <!-- 재료 입출고 로그 (재고 관리 아래) -->
+      <item>
+       <widget class="QGroupBox" name="groupBox_material_tx">
+        <property name="title">
+         <string>재료 입출고 로그</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_material_tx">
+         <item>
+          <widget class="QTableWidget" name="materialTxTable">
+           <property name="editTriggers">
+            <set>QAbstractItemView::NoEditTriggers</set>
+           </property>
+           <property name="selectionMode">
+            <enum>QAbstractItemView::SingleSelection</enum>
+           </property>
+           <property name="selectionBehavior">
+            <enum>QAbstractItemView::SelectRows</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayout_material_tx_control">
+           <item>
+            <spacer name="horizontalSpacer_material_tx">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnReloadMaterialTx">
+             <property name="text">
+              <string>로그 새로고침</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+      </item>
+
      </layout>
     </widget>
    </item>
+
+   <!-- 머신 상태 (분리된 블록) -->
    <item>
     <widget class="QGroupBox" name="groupBox_machine">
      <property name="title">
@@ -150,7 +205,8 @@
      </layout>
     </widget>
    </item>
-   
+
+   <!-- 실시간 대기열 -->
    <item>
     <widget class="QGroupBox" name="groupBox_queue">
      <property name="title">
@@ -204,6 +260,7 @@
      </layout>
     </widget>
    </item>
+
   </layout>
  </widget>
  <resources/>

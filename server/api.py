@@ -84,6 +84,12 @@ def api_get_recipe(menu_id: int, db=Depends(get_db)):
     return inventory_service.get_recipe(db, menu_id)
 
 
+@app.get("/api/materials/txs")
+def api_get_material_txs(limit: int = 200, db=Depends(get_db)):
+    """재료 입출고 로그(최신 순) 조회"""
+    return inventory_service.get_material_tx(db, limit=limit)
+
+
 # ===== 머신 =====
 
 @app.post("/api/machine/status")

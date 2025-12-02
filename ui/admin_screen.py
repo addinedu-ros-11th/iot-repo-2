@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QGroupBox,
     QVBoxLayout,
+    QHeaderView,
 )
 import requests
 
@@ -94,6 +95,24 @@ class AdminScreen(QWidget):
         self.queue_timer.timeout.connect(self.load_queue)
         self.queue_timer.start(3000)
 
+        # material tx table (log) setup
+        if hasattr(self, "materialTxTable"):
+            self.materialTxTable.setColumnCount(8)
+            self.materialTxTable.setHorizontalHeaderLabels(["ID", "재료ID", "재료명", "주문ID", "타입", "수량변동", "메모", "시간"])
+            self.materialTxTable.setColumnHidden(1, False)
+            # prefer resizing: show other columns to contents, let '시간' expand
+            try:
+                header = self.materialTxTable.horizontalHeader()
+                for col in range(0, 7):
+                    header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+                # last column (시간) should stretch to avoid truncation
+                header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
+            except Exception:
+                pass
+
+        if hasattr(self, "btnReloadMaterialTx"):
+            self.btnReloadMaterialTx.clicked.connect(self.load_material_tx)
+
         # reset button connection (may come from .ui)
         if hasattr(self, "btnResetQueue"):
             self.btnResetQueue.clicked.connect(self.on_click_reset_queue)
@@ -104,6 +123,11 @@ class AdminScreen(QWidget):
         self.load_materials()
         self.load_machine_status()
         self.load_queue()
+        # load material transaction logs
+        try:
+            self.load_material_tx()
+        except Exception:
+            pass
 
     def load_materials(self):
         """
@@ -202,6 +226,11 @@ class AdminScreen(QWidget):
             resp.raise_for_status()
             QMessageBox.information(self, "완료", "재고가 변경되었습니다.")
             self.load_materials()
+            # refresh material transaction log so admin sees the new tx immediately
+            try:
+                self.load_material_tx()
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.critical(self, "오류", f"재고 변경에 실패했습니다:\n{e}")
 
@@ -328,6 +357,40 @@ class AdminScreen(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "오류", f"대기열 초기화에 실패했습니다:\n{e}")
 
+    def load_material_tx(self):
+        """
+        재료 입출고 로그 로딩.
+        GET {API_BASE_URL}/api/materials/txs
+        컬럼: id, material_id, material_name, order_id, tx_type, qty_change, note, created_at
+        """
+        try:
+            resp = requests.get(f"{API_BASE_URL}/api/materials/txs", timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+
+            self.materialTxTable.setRowCount(len(data))
+            for i, r in enumerate(data):
+                id_i = QTableWidgetItem(str(r.get("id", "")))
+                mid_i = QTableWidgetItem(str(r.get("material_id", "")))
+                mname_i = QTableWidgetItem(str(r.get("material_name", "")))
+                order_i = QTableWidgetItem(str(r.get("order_id", "")))
+                ttype_i = QTableWidgetItem(str(r.get("tx_type", "")))
+                qty_i = QTableWidgetItem(str(r.get("qty_change", "")))
+                note_i = QTableWidgetItem(str(r.get("note", "")))
+                created_i = QTableWidgetItem(str(r.get("created_at", "")))
+
+                self.materialTxTable.setItem(i, 0, id_i)
+                self.materialTxTable.setItem(i, 1, mid_i)
+                self.materialTxTable.setItem(i, 2, mname_i)
+                self.materialTxTable.setItem(i, 3, order_i)
+                self.materialTxTable.setItem(i, 4, ttype_i)
+                self.materialTxTable.setItem(i, 5, qty_i)
+                self.materialTxTable.setItem(i, 6, note_i)
+                self.materialTxTable.setItem(i, 7, created_i)
+        except Exception:
+            # ignore periodic UI errors
+            return
+
     def on_click_cancel_selected(self):
         """Cancel (set CANCELED) the selected order in the queue (only allowed for PENDING)."""
         row = self.queueTable.currentRow()
@@ -371,6 +434,11 @@ class AdminScreen(QWidget):
             # refresh material stock view so restored quantities are visible
             try:
                 self.load_materials()
+            except Exception:
+                pass
+            # refresh material transaction log so RESTOCK entries appear immediately
+            try:
+                self.load_material_tx()
             except Exception:
                 pass
             try:

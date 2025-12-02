@@ -58,3 +58,28 @@ def get_recipe_by_menu(conn, menu_id: int) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute(sql, (menu_id,))
         return cur.fetchall()
+
+
+def get_material_tx(conn, limit: int = 200) -> list[dict[str, Any]]:
+        """
+        재료 입출고 로그를 반환한다. 최근 항목을 생성시간 내림차순으로 반환.
+        각 row는 다음 키를 포함: id, material_id, material_name, order_id, tx_type, qty_change, note, created_at
+        """
+        sql = """
+        SELECT
+            mt.id,
+            mt.material_id,
+            ms.name AS material_name,
+            mt.order_id,
+            mt.tx_type,
+            mt.qty_change,
+            mt.note,
+            mt.created_at
+        FROM material_tx mt
+        LEFT JOIN material_stock ms ON mt.material_id = ms.id
+        ORDER BY mt.created_at DESC
+        LIMIT %s
+        """
+        with conn.cursor() as cur:
+                cur.execute(sql, (limit,))
+                return cur.fetchall()

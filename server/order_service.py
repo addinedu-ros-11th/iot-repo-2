@@ -265,7 +265,9 @@ def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
       for material_id, total in material_usage.items():
         qty_change = int(total)
         note = f"CancelOrder:{order_id}"
+        # record a RESTOCK transaction for cancellations (restore stock)
         inventory_repo.insert_material_tx(conn, material_id, "RESTOCK", qty_change, note)
+        # update stock by adding back the used quantity
         inventory_repo.update_material_stock(conn, material_id, qty_change)
 
     # 5) 상태 변경

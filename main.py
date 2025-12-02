@@ -30,6 +30,10 @@ def main():
         order_win.order_created.connect(admin_win.load_materials)
     except Exception:
         pass
+    try:
+        order_win.order_created.connect(admin_win.load_material_tx)
+    except Exception:
+        pass
 
     sys.exit(app.exec())
 
