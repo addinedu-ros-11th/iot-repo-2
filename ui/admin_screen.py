@@ -84,7 +84,10 @@ class AdminScreen(QWidget):
             self.queueTable = qt
 
         self.queueTable.setColumnCount(4)
-        self.queueTable.setHorizontalHeaderLabels(["픽업번호", "상태", "주문시각", "ETA(초)"])
+        # store order_id in hidden column 0 for operations; visible columns shifted by 1
+        self.queueTable.setColumnCount(5)
+        self.queueTable.setHorizontalHeaderLabels(["ID", "픽업번호", "상태", "주문시각", "ETA(초)"])
+        self.queueTable.setColumnHidden(0, True)
 
         # 대기열 주기적 갱신 타이머 (3초)
         self.queue_timer = QTimer(self)
@@ -94,6 +97,8 @@ class AdminScreen(QWidget):
         # reset button connection (may come from .ui)
         if hasattr(self, "btnResetQueue"):
             self.btnResetQueue.clicked.connect(self.on_click_reset_queue)
+        if hasattr(self, "btnCancelSelected"):
+            self.btnCancelSelected.clicked.connect(self.on_click_cancel_selected)
 
         # 초기 로딩
         self.load_materials()
@@ -284,11 +289,13 @@ class AdminScreen(QWidget):
                 ordered_at = o.get("ordered_at") or ""
                 ordered_item = QTableWidgetItem(str(ordered_at))
                 eta = QTableWidgetItem(str(o.get("eta_sec", "")))
-
-                self.queueTable.setItem(i, 0, pickup)
-                self.queueTable.setItem(i, 1, status)
-                self.queueTable.setItem(i, 2, ordered_item)
-                self.queueTable.setItem(i, 3, eta)
+                # column mapping: 0:order_id(hidden),1:pickup_no,2:status,3:ordered_at,4:eta
+                id_item = QTableWidgetItem(str(o.get("order_id", "")))
+                self.queueTable.setItem(i, 0, id_item)
+                self.queueTable.setItem(i, 1, pickup)
+                self.queueTable.setItem(i, 2, status)
+                self.queueTable.setItem(i, 3, ordered_item)
+                self.queueTable.setItem(i, 4, eta)
         except Exception:
             # 주기적 갱신 중 에러는 조용히 무시
             return
@@ -320,3 +327,50 @@ class AdminScreen(QWidget):
                 pass
         except Exception as e:
             QMessageBox.critical(self, "오류", f"대기열 초기화에 실패했습니다:\n{e}")
+
+    def on_click_cancel_selected(self):
+        """Cancel (set CANCELED) the selected order in the queue (only allowed for PENDING)."""
+        row = self.queueTable.currentRow()
+        if row is None or row < 0:
+            QMessageBox.warning(self, "알림", "취소할 주문을 선택하세요.")
+            return
+
+        id_item = self.queueTable.item(row, 0)
+        pickup_item = self.queueTable.item(row, 1)
+        status_item = self.queueTable.item(row, 2)
+        if id_item is None:
+            QMessageBox.warning(self, "알림", "선택한 행에 주문 ID가 없습니다.")
+            return
+
+        try:
+            order_id = int(id_item.text())
+        except Exception:
+            QMessageBox.warning(self, "알림", "유효한 주문 ID가 아닙니다.")
+            return
+
+        status = status_item.text() if status_item is not None else ""
+        if status != "PENDING":
+            QMessageBox.information(self, "알림", "선택한 주문은 취소할 수 없습니다 (PENDING 상태만 취소 가능).")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "주문 취소",
+            f"픽업번호 {pickup_item.text() if pickup_item is not None else ''} 주문을 취소하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            resp = requests.patch(f"{API_BASE_URL}/api/orders/{order_id}/status", json={"status": "CANCELED"}, timeout=10)
+            resp.raise_for_status()
+            QMessageBox.information(self, "완료", "주문이 취소되었습니다.")
+            # refresh local queue view and notify others
+            self.load_queue()
+            try:
+                self.queue_reset.emit()
+            except Exception:
+                pass
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"주문 취소에 실패했습니다:\n{e}")
