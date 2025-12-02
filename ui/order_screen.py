@@ -20,7 +20,7 @@ API:
 import os
 
 from PyQt6 import uic
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem
 import requests
 
@@ -28,6 +28,8 @@ from config import API_BASE_URL
 
 
 class OrderScreen(QWidget):
+    # emitted after an order is successfully created (so other windows can refresh)
+    order_created = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "order_screen.ui")
@@ -204,6 +206,11 @@ class OrderScreen(QWidget):
             for i in range(row_count):
                 self.menuTable.setItem(i, 3, QTableWidgetItem("0"))
             self.load_queue()
+            # notify other windows (e.g., AdminScreen) to refresh materials
+            try:
+                self.order_created.emit()
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.critical(self, "오류", f"주문에 실패했습니다:\n{e}")
 

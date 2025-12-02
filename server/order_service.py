@@ -7,6 +7,7 @@ from typing import Any
 
 from common import enums
 from db import order_repo
+from db import inventory_repo
 from server import models
 
 
@@ -84,6 +85,39 @@ def create_order(conn, req: models.OrderCreate) -> dict[str, Any]:
     items = [(item.menu_id, item.qty) for item in req.items]
     if items:
       order_repo.insert_order_items(conn, order_id, items)
+
+    # 3.1) 재고 차감 처리: 메뉴 레시피(material_recipe)를 참고해서 재료 사용량 집계
+    # 각 메뉴별로 recipe를 조회하고, material_id 별 총 사용량을 계산하여 재고를 차감한다.
+    # inventory_repo.get_recipe_by_menu(conn, menu_id) 를 사용
+    # inventory_repo.insert_material_tx(conn, material_id, tx_type, qty_change, note)
+    # inventory_repo.update_material_stock(conn, material_id, qty_change)
+    try:
+      # aggregate usage per material_id
+      material_usage: dict[int, int] = {}
+      for menu_id, qty in items:
+        if qty <= 0:
+          continue
+        recipe_rows = inventory_repo.get_recipe_by_menu(conn, menu_id)
+        for r in recipe_rows:
+          mid = int(r.get("material_id"))
+          use_per_one = int(r.get("use_per_one") or 0)
+          total_use = use_per_one * int(qty)
+          if total_use == 0:
+            continue
+          material_usage[mid] = material_usage.get(mid, 0) + total_use
+
+      # apply material transactions and stock updates
+      for material_id, total in material_usage.items():
+        # qty_change is negative for consumption
+        qty_change = -int(total)
+        note = f"Order:{order_id}"
+        # record tx
+        inventory_repo.insert_material_tx(conn, material_id, "CONSUME", qty_change, note)
+        # update stock
+        inventory_repo.update_material_stock(conn, material_id, qty_change)
+    except Exception:
+      # If inventory update fails, raise to rollback the whole order creation
+      raise
 
     # 4) commit
     conn.commit()

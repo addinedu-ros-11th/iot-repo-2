@@ -25,6 +25,12 @@ def main():
     except Exception:
         pass
 
+    # connect order created signal to admin materials reload so consumed stock appears in Admin UI
+    try:
+        order_win.order_created.connect(admin_win.load_materials)
+    except Exception:
+        pass
+
     sys.exit(app.exec())
 
 
