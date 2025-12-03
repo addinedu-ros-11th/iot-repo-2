@@ -15,146 +15,152 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_main">
 
-   <!-- 재고 관리 -->
+   <!-- 재고 관리 탭 위젯 (재고 관리 + 재료 입출고 로그) -->
    <item>
-    <widget class="QGroupBox" name="groupBox_materials">
-     <property name="title">
-      <string>재고 관리</string>
+    <widget class="QTabWidget" name="tabWidget_materials">
+     <property name="currentIndex">
+      <number>0</number>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_materials">
+     
+     <!-- 탭 1: 재고 관리 -->
+     <widget class="QWidget" name="tab_materials">
+      <attribute name="title">
+       <string>재고 관리</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_tab_materials">
+       <item>
+        <widget class="QTableWidget" name="materialsTable">
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SingleSelection</enum>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+        </widget>
+       </item>
 
-      <item>
-       <widget class="QTableWidget" name="materialsTable">
-        <property name="editTriggers">
-         <set>QAbstractItemView::NoEditTriggers</set>
-        </property>
-        <property name="selectionMode">
-         <enum>QAbstractItemView::SingleSelection</enum>
-        </property>
-        <property name="selectionBehavior">
-         <enum>QAbstractItemView::SelectRows</enum>
-        </property>
-       </widget>
-      </item>
-
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_materials_control">
-        <item>
-         <widget class="QLabel" name="label_qty">
-          <property name="text">
-           <string>수량 변경(+/-):</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSpinBox" name="spinQtyChange">
-          <property name="minimumSize">
-           <size>
-            <width>80</width>
-            <height>0</height>
-           </size>
-          </property>
-          <property name="minimum">
-           <number>-9999</number>
-          </property>
-          <property name="maximum">
-           <number>9999</number>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="label_note">
-          <property name="text">
-           <string>메모:</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="txtNote">
-          <property name="placeholderText">
-           <string>변경 사유 입력</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="btnRestock">
-          <property name="text">
-           <string>적용</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer name="horizontalSpacer">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>40</width>
-            <height>20</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item>
-         <widget class="QPushButton" name="btnReloadMaterials">
-          <property name="text">
-           <string>재고 새로고침</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-
-      <!-- 재료 입출고 로그 (재고 관리 아래) -->
-      <item>
-       <widget class="QGroupBox" name="groupBox_material_tx">
-        <property name="title">
-         <string>재료 입출고 로그</string>
-        </property>
-        <layout class="QVBoxLayout" name="verticalLayout_material_tx">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_materials_control">
          <item>
-          <widget class="QTableWidget" name="materialTxTable">
-           <property name="editTriggers">
-            <set>QAbstractItemView::NoEditTriggers</set>
-           </property>
-           <property name="selectionMode">
-            <enum>QAbstractItemView::SingleSelection</enum>
-           </property>
-           <property name="selectionBehavior">
-            <enum>QAbstractItemView::SelectRows</enum>
+          <widget class="QPushButton" name="btnDecreaseQty">
+           <property name="text">
+            <string>- 수량 감소</string>
            </property>
           </widget>
          </item>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_material_tx_control">
-           <item>
-            <spacer name="horizontalSpacer_material_tx">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>40</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-           <item>
-            <widget class="QPushButton" name="btnReloadMaterialTx">
-             <property name="text">
-              <string>로그 새로고침</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
+          <widget class="QSpinBox" name="spinQtyChange">
+           <property name="minimumSize">
+            <size>
+             <width>80</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="maximum">
+            <number>9999</number>
+           </property>
+           <property name="value">
+            <number>1</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnIncreaseQty">
+           <property name="text">
+            <string>+ 수량 증가</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_note">
+           <property name="text">
+            <string>메모:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="txtNote">
+           <property name="placeholderText">
+            <string>변경 사유 입력</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnReloadMaterials">
+           <property name="text">
+            <string>재고 새로고침</string>
+           </property>
+          </widget>
          </item>
         </layout>
-       </widget>
-      </item>
-
-     </layout>
+       </item>
+      </layout>
+     </widget>
+     
+     <!-- 탭 2: 재료 입출고 로그 -->
+     <widget class="QWidget" name="tab_material_tx">
+      <attribute name="title">
+       <string>재료 입출고 로그</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_tab_material_tx">
+       <item>
+        <widget class="QTableWidget" name="materialTxTable">
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SingleSelection</enum>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_material_tx_control">
+         <item>
+          <spacer name="horizontalSpacer_material_tx">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnReloadMaterialTx">
+           <property name="text">
+            <string>로그 새로고침</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
     </widget>
    </item>
 

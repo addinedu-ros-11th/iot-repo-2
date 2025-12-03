@@ -50,6 +50,217 @@ class AdminScreen(QWidget):
         ui_path = os.path.join(os.path.dirname(__file__), "admin_screen.ui")
         uic.loadUi(ui_path, self)
 
+        # 관리자 화면 붕어빵 테마 스타일 적용
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #F5F5DC;
+                font-family: 'Malgun Gothic', 'AppleGothic', sans-serif;
+                font-size: 11pt;
+            }
+            QGroupBox {
+                background-color: #FAEBD7;
+                border: 2px solid #8B4513;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding: 12px;
+                font-weight: bold;
+                font-size: 12pt;
+                color: #654321;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 4px 12px;
+                background-color: #8B4513;
+                color: white;
+                border-radius: 4px;
+            }
+            QPushButton {
+                background-color: #A0522D;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 15px;
+                font-size: 11pt;
+                font-weight: bold;
+                min-height: 35px;
+            }
+            QPushButton:hover {
+                background-color: #BC8F8F;
+            }
+            QPushButton:pressed {
+                background-color: #8B4513;
+            }
+            QPushButton#btnRestock {
+                background-color: #228B22;
+            }
+            QPushButton#btnRestock:hover {
+                background-color: #32CD32;
+            }
+            QPushButton#btnEmergencyStop {
+                background-color: #DC143C;
+                font-size: 12pt;
+            }
+            QPushButton#btnEmergencyStop:hover {
+                background-color: #FF0000;
+            }
+            QPushButton#btnRestartMachine {
+                background-color: #4169E1;
+            }
+            QPushButton#btnRestartMachine:hover {
+                background-color: #6495ED;
+            }
+            QPushButton#btnCancelSelected {
+                background-color: #CD5C5C;
+            }
+            QPushButton#btnResetQueue {
+                background-color: #FF6347;
+            }
+            QTableWidget {
+                background-color: white;
+                border: 2px solid #8B4513;
+                border-radius: 4px;
+                gridline-color: #DEB887;
+                font-size: 10pt;
+            }
+            QTableWidget::item {
+                padding: 10px 6px;
+                min-height: 30px;
+            }
+            QTableWidget::item:selected {
+                background-color: #F4A460;
+                color: white;
+            }
+            QHeaderView::section {
+                background-color: #A0522D;
+                color: white;
+                padding: 10px 6px;
+                border: 1px solid #8B4513;
+                font-weight: bold;
+                font-size: 10pt;
+                min-height: 35px;
+            }
+            QLineEdit {
+                background-color: white;
+                border: 2px solid #8B4513;
+                border-radius: 4px;
+                padding: 6px;
+                font-size: 11pt;
+            }
+            QLineEdit:focus {
+                border: 2px solid #A0522D;
+            }
+            QSpinBox {
+                background-color: white;
+                border: 2px solid #8B4513;
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 11pt;
+                min-height: 30px;
+            }
+            QSpinBox::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 20px;
+                border-left: 1px solid #8B4513;
+                background-color: #A0522D;
+            }
+            QSpinBox::up-button:hover {
+                background-color: #BC8F8F;
+            }
+            QSpinBox::up-arrow {
+                image: none;
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-bottom: 6px solid white;
+            }
+            QSpinBox::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: 20px;
+                border-left: 1px solid #8B4513;
+                background-color: #A0522D;
+            }
+            QSpinBox::down-button:hover {
+                background-color: #BC8F8F;
+            }
+            QSpinBox::down-arrow {
+                image: none;
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid white;
+            }
+            QComboBox {
+                background-color: white;
+                border: 2px solid #8B4513;
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 10pt;
+            }
+            QComboBox:hover {
+                border: 2px solid #A0522D;
+            }
+            QComboBox::drop-down {
+                border: none;
+                background-color: #D2691E;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 6px solid white;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                border: 2px solid #8B4513;
+                selection-background-color: #F4A460;
+                selection-color: #654321;
+                color: #654321;
+            }
+            QComboBox QAbstractItemView::item {
+                padding: 6px;
+                min-height: 25px;
+            }
+            QComboBox QAbstractItemView::item:hover {
+                background-color: #DEB887;
+                color: #654321;
+            }
+            QLabel {
+                color: #654321;
+                font-size: 11pt;
+            }
+            QTabWidget::pane {
+                border: 2px solid #8B4513;
+                border-radius: 4px;
+                background-color: #FAEBD7;
+                padding: 5px;
+            }
+            QTabBar::tab {
+                background-color: #D2B48C;
+                color: #654321;
+                border: 2px solid #8B4513;
+                border-bottom: none;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                padding: 8px 20px;
+                margin-right: 2px;
+                font-weight: bold;
+                font-size: 11pt;
+            }
+            QTabBar::tab:selected {
+                background-color: #FAEBD7;
+                color: #8B4513;
+                border-bottom: 2px solid #FAEBD7;
+            }
+            QTabBar::tab:hover {
+                background-color: #DEB887;
+            }
+        """)
+
         # 재고 테이블 컬럼 구조
         self.materialsTable.setColumnCount(4)
         self.materialsTable.setHorizontalHeaderLabels(["ID", "재료명", "단위", "수량"])
@@ -63,7 +274,10 @@ class AdminScreen(QWidget):
 
         # 버튼 시그널 연결
         self.btnReloadMaterials.clicked.connect(self.load_materials)
-        self.btnRestock.clicked.connect(self.on_click_restock)
+        if hasattr(self, "btnIncreaseQty"):
+            self.btnIncreaseQty.clicked.connect(self.on_click_increase_qty)
+        if hasattr(self, "btnDecreaseQty"):
+            self.btnDecreaseQty.clicked.connect(self.on_click_decrease_qty)
         self.btnReloadMachine.clicked.connect(self.load_machine_status)
         # 비상정지 / 재시작 버튼 (UI 전용 핸들러)
         if hasattr(self, "btnEmergencyStop"):
@@ -182,31 +396,44 @@ class AdminScreen(QWidget):
                 self.materialsTable.setItem(i, 2, unit_item)
                 self.materialsTable.setItem(i, 3, qty_item)
 
+            self.materialsTable.resizeRowsToContents()
             self.materialsTable.resizeColumnsToContents()
         except Exception as e:
             QMessageBox.critical(self, "오류", f"재고 목록을 불러오지 못했습니다:\n{e}")
 
-    def on_click_restock(self):
+    def on_click_increase_qty(self):
         """
-        재고 보충/조정.
+        재고 증가 (spinQtyChange 값만큼).
+        """
+        qty = int(self.spinQtyChange.value())
+        self._apply_qty_change(qty)
+
+    def on_click_decrease_qty(self):
+        """
+        재고 감소 (spinQtyChange 값만큼).
+        """
+        qty = int(self.spinQtyChange.value())
+        self._apply_qty_change(-qty)
+
+    def _apply_qty_change(self, qty_change: int):
+        """
+        선택된 재료의 재고를 qty_change만큼 변경.
 
         요구사항:
         1) self.materialsTable 에서 현재 선택된 row 인덱스 가져오기
            - 선택 없으면 "재고 목록에서 재료를 선택하세요." 메시지
         2) 선택된 row 의 col0 에서 material_id(int) 읽기
-        3) self.spinQtyChange.value() 를 qty_change 로 사용
-           - 0이면 "변경량이 0입니다." 메시지
-        4) self.txtNote.text() 를 note 로 사용 (빈 문자열이면 None)
-        5) payload 생성:
+        3) self.txtNote.text() 를 note 로 사용 (빈 문자열이면 None)
+        4) payload 생성:
            {
              "tx_type": "RESTOCK" if qty_change > 0 else "ADJUST",
              "qty_change": qty_change,
              "note": note_or_none
            }
-        6) POST {API_BASE_URL}/api/materials/{material_id}/tx 호출
+        5) POST {API_BASE_URL}/api/materials/{material_id}/tx 호출
            - 성공 시 "재고가 변경되었습니다." 메시지
            - 이후 self.load_materials() 다시 호출
-        7) 실패 시 QMessageBox 로 에러 표시
+        6) 실패 시 QMessageBox 로 에러 표시
         """
         row = self.materialsTable.currentRow()
         if row is None or row < 0:
@@ -222,11 +449,6 @@ class AdminScreen(QWidget):
             material_id = int(id_item.text())
         except Exception:
             QMessageBox.warning(self, "알림", "유효한 재료 ID가 아닙니다.")
-            return
-
-        qty_change = int(self.spinQtyChange.value())
-        if qty_change == 0:
-            QMessageBox.information(self, "알림", "변경량이 0입니다.")
             return
 
         note_text = self.txtNote.text().strip()
@@ -312,6 +534,9 @@ class AdminScreen(QWidget):
                 self.machineTable.setItem(i, 4, QTableWidgetItem(str(plate2)))
                 self.machineTable.setItem(i, 5, QTableWidgetItem(str(conveyor)))
                 self.machineTable.setItem(i, 6, QTableWidgetItem(str(last_hb)))
+            
+            self.machineTable.resizeRowsToContents()
+            self.machineTable.resizeColumnsToContents()
         except Exception:
             # 조용히 무시 (UI 주기 갱신 중 에러가 발생해도 사용자에게 계속 방해하지 않음)
             return
@@ -368,6 +593,9 @@ class AdminScreen(QWidget):
 
                 self.queueTable.setItem(i, 3, ordered_item)
                 self.queueTable.setItem(i, 4, eta)
+            
+            self.queueTable.resizeRowsToContents()
+            self.queueTable.resizeColumnsToContents()
         except Exception:
             # 주기적 갱신 중 에러는 조용히 무시
             return
@@ -430,6 +658,9 @@ class AdminScreen(QWidget):
                 self.materialTxTable.setItem(i, 5, qty_i)
                 self.materialTxTable.setItem(i, 6, note_i)
                 self.materialTxTable.setItem(i, 7, created_i)
+            
+            self.materialTxTable.resizeRowsToContents()
+            self.materialTxTable.resizeColumnsToContents()
         except Exception:
             # 주기적으로 발생하는 UI 오류는 무시
             return

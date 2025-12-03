@@ -21,7 +21,7 @@ import os
 
 from PyQt6 import uic
 from PyQt6.QtCore import QTimer, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem, QPushButton, QHBoxLayout, QGridLayout, QSizePolicy
+from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem, QPushButton, QHBoxLayout, QGridLayout, QSizePolicy, QVBoxLayout
 from functools import partial
 import requests
 
@@ -36,6 +36,134 @@ class OrderScreen(QWidget):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "order_screen.ui")
         uic.loadUi(ui_path, self)
+
+        # 붕어빵 가게 테마 스타일 적용
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #FFF8E7;
+                font-family: 'Malgun Gothic', 'AppleGothic', sans-serif;
+                font-size: 12pt;
+            }
+            QGroupBox {
+                background-color: #FFEFD5;
+                border: 2px solid #D2691E;
+                border-radius: 10px;
+                margin-top: 12px;
+                padding: 15px;
+                font-weight: bold;
+                font-size: 13pt;
+                color: #8B4513;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 5px 15px;
+                background-color: #FF8C00;
+                color: white;
+                border-radius: 5px;
+            }
+            QPushButton {
+                background-color: #FF8C00;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 20px;
+                font-size: 13pt;
+                font-weight: bold;
+                min-height: 45px;
+            }
+            QPushButton[cartControl="true"] {
+                background-color: #FF8C00;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 0px;
+                margin: 0px;
+                font-size: 14pt;
+                font-weight: bold;
+            }
+            QPushButton[cartControl="true"]:hover {
+                background-color: #FFA500;
+            }
+            QPushButton[cartControl="true"]:pressed {
+                background-color: #FF7F00;
+            }
+            QPushButton:hover {
+                background-color: #FFA500;
+            }
+            QPushButton:pressed {
+                background-color: #FF7F00;
+            }
+            QPushButton:disabled {
+                background-color: #D3D3D3;
+                color: #808080;
+            }
+            QPushButton#btnOrder {
+                background-color: #DC143C;
+                font-size: 16pt;
+                min-height: 30px;
+            }
+            QPushButton#btnOrder:hover {
+                background-color: #FF1493;
+            }
+            QGroupBox#groupBox_order {
+                background-color: #FFEFD5;
+            }
+            QPushButton#btnClearCart {
+                background-color: #CD853F;
+            }
+            QPushButton#btnClearCart:hover {
+                background-color: #D2691E;
+            }
+            QTableWidget {
+                background-color: white;
+                border: 2px solid #D2691E;
+                border-radius: 5px;
+                gridline-color: #FFE4B5;
+                font-size: 11pt;
+            }
+            QTableWidget::item {
+                padding: 8px 8px;
+                min-height: 30px;
+            }
+            QTableWidget::item:selected {
+                background-color: #FFDAB9;
+                color: #8B4513;
+            }
+            QHeaderView::section {
+                background-color: #FF8C00;
+                color: white;
+                padding: 12px 8px;
+                border: 1px solid #D2691E;
+                font-weight: bold;
+                font-size: 12pt;
+                min-height: 40px;
+            }
+            QLineEdit {
+                background-color: white;
+                border: 2px solid #D2691E;
+                border-radius: 5px;
+                padding: 8px;
+                font-size: 12pt;
+            }
+            QLineEdit:focus {
+                border: 2px solid #FF8C00;
+            }
+            QLabel {
+                color: #8B4513;
+                font-size: 12pt;
+                background-color: transparent;
+            }
+            QLabel#lblTotal {
+                font-size: 16pt;
+                font-weight: bold;
+                color: #DC143C;
+                background-color: #FFEFD5;
+            }
+            QLabel#label_rfid {
+                background-color: #FFEFD5;
+            }
+        """)
 
         # 메뉴 목록은 버튼형 UI로 표시하도록 변경: 기존 테이블/리로드 버튼은 숨김
         try:
@@ -52,14 +180,57 @@ class OrderScreen(QWidget):
         self.cart: dict[int, dict] = {}
         # 구버전 UI에는 `cartTable`이 없을 수 있으므로 존재 여부를 확인
         if hasattr(self, "cartTable"):
-            # 마지막 컬럼은 조절 버튼(+/-)을 배치함
-            self.cartTable.setColumnCount(5)
-            self.cartTable.setHorizontalHeaderLabels(["메뉴명", "가격", "수량", "합계", "조절"])
+            # 수량 조절 버튼을 테이블 밖에 배치
+            self.cartTable.setColumnCount(4)
+            self.cartTable.setHorizontalHeaderLabels(["메뉴명", "가격", "수량", "합계"])
+            # 테이블 행 높이 자동 조절 비활성화
+            self.cartTable.verticalHeader().setSectionResizeMode(self.cartTable.verticalHeader().ResizeMode.Fixed)
+            # 테이블 선택 시그널 연결
+            self.cartTable.itemSelectionChanged.connect(self._update_cart_buttons)
+            # 컬럼 크기 자동 조정 설정
+            from PyQt6.QtWidgets import QHeaderView
+            header = self.cartTable.horizontalHeader()
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # 메뉴명: 확장
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)  # 가격: 내용에 맞춤
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # 수량: 내용에 맞춤
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # 합계: 내용에 맞춤
 
-        # 총합 레이블과 버튼은 .ui에서 제공될 수 있음
+        # 총 결제 금액 레이블과 버튼은 .ui에서 제공될 수 있음
         # '장바구니에 담기' 버튼은 UI에서 제거됨
         if hasattr(self, "btnClearCart"):
             self.btnClearCart.clicked.connect(self.on_click_clear_cart)
+        
+        # 수량 조절 버튼 + 장바구니 비우기 버튼을 동일한 가로 레이아웃으로 배치
+        if hasattr(self, "groupBox_cart"):
+            cart_layout = self.groupBox_cart.layout()
+            if cart_layout:
+                # 버튼 레이아웃 생성
+                btn_layout = QHBoxLayout()
+                self.btnCartIncrease = QPushButton("+ 수량 증가")
+                self.btnCartDecrease = QPushButton("- 수량 감소")
+                self.btnCartIncrease.setEnabled(False)
+                self.btnCartDecrease.setEnabled(False)
+                self.btnCartIncrease.clicked.connect(self._on_cart_increase)
+                self.btnCartDecrease.clicked.connect(self._on_cart_decrease)
+                btn_layout.addWidget(self.btnCartDecrease)
+                btn_layout.addWidget(self.btnCartIncrease)
+                # 기존 UI에 존재하는 장바구니 비우기 버튼을 같은 선상에 배치
+                if hasattr(self, "btnClearCart"):
+                    try:
+                        # 부모 레이아웃에서 제거 후 새 레이아웃에 추가
+                        old_parent = self.btnClearCart.parent()
+                        if old_parent is not None and hasattr(old_parent, 'layout'):
+                            old_lay = old_parent.layout()
+                            if old_lay is not None:
+                                old_lay.removeWidget(self.btnClearCart)
+                        btn_layout.addWidget(self.btnClearCart)
+                    except Exception:
+                        # 문제가 있더라도 계속 진행
+                        btn_layout.addWidget(self.btnClearCart)
+                btn_layout.addStretch()
+                # cartTable 다음에 버튼 레이아웃 삽입
+                cart_layout.insertLayout(1, btn_layout)
+        
         # 장바구니가 비어있을 때 주문 버튼을 비활성화
         try:
             self.btnOrder.setEnabled(False)
@@ -125,8 +296,29 @@ class OrderScreen(QWidget):
                 menu_id = int(item.get("id", 0) or 0)
                 name = item.get("name", "")
                 price = int(item.get("price", 0) or 0)
-                btn = QPushButton(f"{name}\n{price}원")
+                btn = QPushButton(f"🐟 {name}\n💰 {price:,}원")
                 btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+                btn.setMinimumHeight(70)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                                    stop:0 #FFD700, stop:1 #FFA500);
+                        color: #8B4513;
+                        border: 3px solid #D2691E;
+                        border-radius: 15px;
+                        font-size: 15pt;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                                    stop:0 #FFE55C, stop:1 #FFB347);
+                        border: 3px solid #FF8C00;
+                    }
+                    QPushButton:pressed {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                                    stop:0 #FFA500, stop:1 #FF8C00);
+                    }
+                """)
                 btn.clicked.connect(lambda _checked, m=menu_id, n=name, p=price: self._menu_add_clicked(m, n, p))
                 r = idx // 3
                 c = idx % 3
@@ -180,6 +372,9 @@ class OrderScreen(QWidget):
                 self.queueTable.setItem(i, 1, status)
                 self.queueTable.setItem(i, 2, ordered_item)
                 self.queueTable.setItem(i, 3, eta)
+            
+            self.queueTable.resizeRowsToContents()
+            self.queueTable.resizeColumnsToContents()
         except Exception:
             # 주기적 갱신 중 에러는 조용히 무시
             return
@@ -319,6 +514,8 @@ class OrderScreen(QWidget):
         else:
             self.cart[menu_id] = {"menu_id": menu_id, "name": name, "price": price, "qty": 1}
         self._refresh_cart_ui()
+        # 방금 추가한 메뉴를 장바구니에서 선택
+        self._select_cart_item_by_menu_id(menu_id)
 
     def _cart_inc(self, menu_id: int):
         if menu_id in self.cart:
@@ -338,10 +535,10 @@ class OrderScreen(QWidget):
         # cartTable의 행을 지움
         if hasattr(self, "cartTable"):
             self.cartTable.setRowCount(0)
-        # 총합을 갱신하고 주문 버튼 상태를 업데이트(비활성화)
+        # 총 결제 금액을 갱신하고 주문 버튼 상태를 업데이트(비활성화)
         try:
             if hasattr(self, "lblTotal"):
-                self.lblTotal.setText("총합: 0")
+                self.lblTotal.setText("총 결제 금액: 0원")
             self.btnOrder.setEnabled(False)
         except Exception:
             pass
@@ -360,29 +557,88 @@ class OrderScreen(QWidget):
             subtotal = int(it.get("price", 0)) * int(it.get("qty", 0))
             total += subtotal
             subtotal_i = QTableWidgetItem(str(subtotal))
+            
             self.cartTable.setItem(i, 0, name_i)
             self.cartTable.setItem(i, 1, price_i)
             self.cartTable.setItem(i, 2, qty_i)
             self.cartTable.setItem(i, 3, subtotal_i)
-            # 조절 버튼(+/-) 추가
-            menu_id = int(it.get("menu_id") or 0)
-            control_w = QWidget()
-            hl = QHBoxLayout(control_w)
-            hl.setContentsMargins(0, 0, 0, 0)
-            hl.setSpacing(4)
-            btn_minus = QPushButton("-")
-            btn_plus = QPushButton("+")
-            btn_minus.clicked.connect(partial(self._cart_dec, menu_id))
-            btn_plus.clicked.connect(partial(self._cart_inc, menu_id))
-            hl.addWidget(btn_minus)
-            hl.addWidget(btn_plus)
-            self.cartTable.setCellWidget(i, 4, control_w)
+            
+            # 행 높이 설정
+            self.cartTable.setRowHeight(i, 40)
 
-        # 총합 레이블을 갱신하고 장바구니가 비어있지 않으면 주문 버튼을 활성화
+        # 총 결제 금액 레이블을 갱신하고 장바구니가 비어있지 않으면 주문 버튼을 활성화
         try:
             if hasattr(self, "lblTotal"):
-                self.lblTotal.setText(f"총합: {total}")
+                self.lblTotal.setText(f"총 결제 금액: {total:,}원")
             self.btnOrder.setEnabled(total > 0)
         except Exception:
             pass
+        
+        # 수량 조절 버튼 상태 업데이트
+        self._update_cart_buttons()
+    
+    def _update_cart_buttons(self):
+        """선택된 행이 있을 때만 수량 조절 버튼 활성화"""
+        if not hasattr(self, "cartTable") or not hasattr(self, "btnCartIncrease"):
+            return
+        selected = len(self.cartTable.selectedItems()) > 0
+        self.btnCartIncrease.setEnabled(selected)
+        self.btnCartDecrease.setEnabled(selected)
+    
+    def _on_cart_increase(self):
+        """선택된 행의 수량 증가"""
+        if not hasattr(self, "cartTable"):
+            return
+        row = self.cartTable.currentRow()
+        if row < 0:
+            return
+        items = list(self.cart.values())
+        if row >= len(items):
+            return
+        menu_id = int(items[row].get("menu_id") or 0)
+        if menu_id in self.cart:
+            self.cart[menu_id]["qty"] += 1
+            self._refresh_cart_ui()
+            self.cartTable.selectRow(row)  # 선택 유지
+    
+    def _on_cart_decrease(self):
+        """선택된 행의 수량 감소"""
+        if not hasattr(self, "cartTable"):
+            return
+        row = self.cartTable.currentRow()
+        if row < 0:
+            return
+        items = list(self.cart.values())
+        if row >= len(items):
+            return
+        menu_id = int(items[row].get("menu_id") or 0)
+        if menu_id in self.cart:
+            self.cart[menu_id]["qty"] -= 1
+            if self.cart[menu_id]["qty"] <= 0:
+                del self.cart[menu_id]
+            self._refresh_cart_ui()
+            # 행이 삭제된 경우 이전 행 선택
+            if row > 0 and row >= self.cartTable.rowCount():
+                self.cartTable.selectRow(row - 1)
+            elif self.cartTable.rowCount() > 0:
+                self.cartTable.selectRow(min(row, self.cartTable.rowCount() - 1))
+    
+    def _select_cart_item_by_menu_id(self, menu_id: int):
+        """장바구니에서 특정 menu_id를 가진 행 선택"""
+        if not hasattr(self, "cartTable"):
+            return
+        items = list(self.cart.values())
+        for i, it in enumerate(items):
+            if int(it.get("menu_id") or 0) == menu_id:
+                self.cartTable.selectRow(i)
+                break
+    
+    def _cart_qty_changed(self, menu_id: int, new_qty: int):
+        """SpinBox에서 수량이 변경되면 cart를 업데이트하고 UI 갱신"""
+        if menu_id in self.cart:
+            if new_qty <= 0:
+                del self.cart[menu_id]
+            else:
+                self.cart[menu_id]["qty"] = new_qty
+            self._refresh_cart_ui()
 

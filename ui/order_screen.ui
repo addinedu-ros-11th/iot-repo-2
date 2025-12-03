@@ -21,6 +21,12 @@
        <property name="title">
         <string>메뉴 목록</string>
        </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>250</height>
+        </size>
+       </property>
        <layout class="QVBoxLayout" name="verticalLayout_menu">
         <item>
          <widget class="QTableWidget" name="menuTable">
@@ -47,9 +53,21 @@
       <property name="title">
        <string>장바구니</string>
       </property>
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>300</height>
+       </size>
+      </property>
       <layout class="QVBoxLayout" name="verticalLayout_cart">
        <item>
         <widget class="QTableWidget" name="cartTable">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>200</height>
+         </size>
+        </property>
         <property name="selectionMode">
          <enum>QAbstractItemView::SingleSelection</enum>
         </property>
@@ -60,7 +78,6 @@
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_cart_control">
-        
         <item>
          <widget class="QPushButton" name="btnClearCart">
           <property name="text">
@@ -68,23 +85,26 @@
           </property>
          </widget>
         </item>
-          <item>
-           <spacer name="horizontalSpacer_cart">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
+        <item>
+         <spacer name="horizontalSpacer_cart">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
         <item>
          <widget class="QLabel" name="lblTotal">
           <property name="text">
-           <string>총합: 0</string>
+           <string>총 결제 금액: 0원</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignRight|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -106,14 +126,56 @@
        </property>
        <layout class="QHBoxLayout" name="horizontalLayout_order">
         <item>
-         <widget class="QLabel" name="label_rfid">
-          <property name="text">
-           <string>RFID 카드:</string>
-          </property>
-         </widget>
+         <layout class="QVBoxLayout" name="verticalLayout_rfid_label">
+          <item>
+           <spacer name="verticalSpacer_rfid_top">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_rfid">
+            <property name="text">
+             <string>RFID 카드:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="verticalSpacer_rfid_bottom">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
         </item>
         <item>
          <widget class="QLineEdit" name="txtRfid">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>50</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>50</height>
+           </size>
+          </property>
           <property name="placeholderText">
            <string>카드를 스캔하거나 ID를 입력하세요</string>
           </property>
@@ -124,7 +186,13 @@
           <property name="minimumSize">
            <size>
             <width>100</width>
-            <height>0</height>
+            <height>50</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>50</height>
            </size>
           </property>
           <property name="font">
@@ -133,7 +201,7 @@
            </font>
           </property>
           <property name="text">
-           <string>주문 하기</string>
+           <string>결제 하기</string>
           </property>
          </widget>
         </item>
