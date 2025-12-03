@@ -21,7 +21,8 @@ import os
 
 from PyQt6 import uic
 from PyQt6.QtCore import QTimer, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem
+from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem, QPushButton, QHBoxLayout, QGridLayout, QSizePolicy
+from functools import partial
 import requests
 
 from config import API_BASE_URL
@@ -35,22 +36,27 @@ class OrderScreen(QWidget):
         ui_path = os.path.join(os.path.dirname(__file__), "order_screen.ui")
         uic.loadUi(ui_path, self)
 
-        # 메뉴 테이블 기본 설정 (컬럼 구조만 잡아둠)
-        self.menuTable.setColumnCount(4)
-        self.menuTable.setHorizontalHeaderLabels(["ID", "메뉴명", "가격", "수량"])
-        self.menuTable.setColumnHidden(0, True)
+        # 메뉴 목록은 버튼형 UI로 표시하도록 변경: 기존 테이블/리로드 버튼은 숨김
+        try:
+            self.menuTable.hide()
+        except Exception:
+            pass
+        try:
+            self.btnReloadMenu.hide()
+        except Exception:
+            pass
 
         # 장바구니 구조 초기화
         # cart는 dict: menu_id -> {"menu_id":..., "name":..., "price":..., "qty":...}
         self.cart: dict[int, dict] = {}
         # 구버전 UI에는 `cartTable`이 없을 수 있으므로 존재 여부를 확인
         if hasattr(self, "cartTable"):
-            self.cartTable.setColumnCount(4)
-            self.cartTable.setHorizontalHeaderLabels(["메뉴명", "단가", "수량", "합계"])
+            # 마지막 컬럼은 조절 버튼(+/-)을 배치함
+            self.cartTable.setColumnCount(5)
+            self.cartTable.setHorizontalHeaderLabels(["메뉴명", "가격", "수량", "합계", "조절"])
 
         # 총합 레이블과 버튼은 .ui에서 제공될 수 있음
-        if hasattr(self, "btnAddToCart"):
-            self.btnAddToCart.clicked.connect(self.on_click_add_to_cart)
+        # '장바구니에 담기' 버튼은 UI에서 제거됨
         if hasattr(self, "btnClearCart"):
             self.btnClearCart.clicked.connect(self.on_click_clear_cart)
         # 장바구니가 비어있을 때 주문 버튼을 비활성화
@@ -99,19 +105,38 @@ class OrderScreen(QWidget):
             resp.raise_for_status()
             data = resp.json()
 
-            self.menuTable.setRowCount(len(data))
-            for i, item in enumerate(data):
-                id_item = QTableWidgetItem(str(item.get("id", "")))
-                name_item = QTableWidgetItem(item.get("name", ""))
-                price_item = QTableWidgetItem(str(item.get("price", "")))
-                qty_item = QTableWidgetItem("0")
+            # 이전에 생성된 버튼 위젯이 있으면 제거
+            try:
+                if hasattr(self, "menu_buttons_widget") and self.menu_buttons_widget is not None:
+                    self.menu_buttons_widget.setParent(None)
+            except Exception:
+                pass
 
-                self.menuTable.setItem(i, 0, id_item)
-                self.menuTable.setItem(i, 1, name_item)
-                self.menuTable.setItem(i, 2, price_item)
-                self.menuTable.setItem(i, 3, qty_item)
+            # 버튼 그리드 위젯 생성 (최대 6개 버튼)
+            self.menu_buttons_widget = QWidget()
+            grid = QGridLayout(self.menu_buttons_widget)
+            grid.setContentsMargins(4, 4, 4, 4)
+            grid.setSpacing(6)
 
-            self.menuTable.resizeColumnsToContents()
+            # 사용자 요청: 버튼 6개로 표시 (or fewer)
+            max_buttons = 6
+            for idx, item in enumerate(data[:max_buttons]):
+                menu_id = int(item.get("id", 0) or 0)
+                name = item.get("name", "")
+                price = int(item.get("price", 0) or 0)
+                btn = QPushButton(f"{name}\n{price}원")
+                btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+                btn.clicked.connect(lambda _checked, m=menu_id, n=name, p=price: self._menu_add_clicked(m, n, p))
+                r = idx // 3
+                c = idx % 3
+                grid.addWidget(btn, r, c)
+
+            # groupBox_menu의 레이아웃에 버튼 위젯을 삽입
+            try:
+                layout = self.groupBox_menu.layout()
+                layout.insertWidget(0, self.menu_buttons_widget)
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.critical(self, "오류", f"메뉴를 불러오지 못했습니다:\n{e}")
 
@@ -217,10 +242,7 @@ class OrderScreen(QWidget):
             QMessageBox.information(self, "주문 완료", f"주문이 접수되었습니다. 픽업 번호: {pickup_no}")
 
             # 초기화 및 대기열 갱신
-            # menuTable의 수량을 0으로 초기화
-            row_count = self.menuTable.rowCount()
-            for i in range(row_count):
-                self.menuTable.setItem(i, 3, QTableWidgetItem("0"))
+            # 메뉴 테이블의 '추가' 버튼은 그대로 두고, 장바구니만 초기화
             # 주문 성공 후 장바구니 비우기
             try:
                 self.on_click_clear_cart()
@@ -263,38 +285,51 @@ class OrderScreen(QWidget):
 
         After adding, reset the menuTable qty cell to 0 for those rows.
         """
-        row_count = self.menuTable.rowCount()
-        added = False
-        for i in range(row_count):
-            id_item = self.menuTable.item(i, 0)
-            name_item = self.menuTable.item(i, 1)
-            price_item = self.menuTable.item(i, 2)
-            qty_item = self.menuTable.item(i, 3)
-            if id_item is None or qty_item is None:
-                continue
-            try:
-                menu_id = int(id_item.text())
-                qty = int(qty_item.text())
-                price = int(price_item.text())
-                name = name_item.text()
-            except Exception:
-                continue
-            if qty <= 0:
-                continue
-            # 장바구니에 합치기(병합)
-            if menu_id in self.cart:
-                self.cart[menu_id]["qty"] += qty
-            else:
-                self.cart[menu_id] = {"menu_id": menu_id, "name": name, "price": price, "qty": qty}
-            # 메뉴 수량을 0으로 초기화
-            self.menuTable.setItem(i, 3, QTableWidgetItem("0"))
-            added = True
-
-        if not added:
-            QMessageBox.information(self, "알림", "장바구니에 담을 메뉴가 없습니다 (수량을 1 이상 입력하세요).")
+        # 메뉴 테이블에서 현재 선택된 행을 장바구니에 qty=1로 추가
+        row = self.menuTable.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "알림", "먼저 메뉴를 선택하세요.")
+            return
+        id_item = self.menuTable.item(row, 0)
+        name_item = self.menuTable.item(row, 1)
+        price_item = self.menuTable.item(row, 2)
+        if id_item is None or name_item is None or price_item is None:
+            QMessageBox.information(self, "알림", "선택한 메뉴 정보를 읽을 수 없습니다.")
+            return
+        try:
+            menu_id = int(id_item.text())
+            name = name_item.text()
+            price = int(price_item.text())
+        except Exception:
+            QMessageBox.information(self, "알림", "선택한 메뉴의 데이터가 올바르지 않습니다.")
             return
 
+        if menu_id in self.cart:
+            self.cart[menu_id]["qty"] += 1
+        else:
+            self.cart[menu_id] = {"menu_id": menu_id, "name": name, "price": price, "qty": 1}
+
         self._refresh_cart_ui()
+
+    def _menu_add_clicked(self, menu_id: int, name: str, price: int):
+        """Handler for per-menu '추가' button: add qty=1 to cart."""
+        if menu_id in self.cart:
+            self.cart[menu_id]["qty"] += 1
+        else:
+            self.cart[menu_id] = {"menu_id": menu_id, "name": name, "price": price, "qty": 1}
+        self._refresh_cart_ui()
+
+    def _cart_inc(self, menu_id: int):
+        if menu_id in self.cart:
+            self.cart[menu_id]["qty"] += 1
+            self._refresh_cart_ui()
+
+    def _cart_dec(self, menu_id: int):
+        if menu_id in self.cart:
+            self.cart[menu_id]["qty"] -= 1
+            if self.cart[menu_id]["qty"] <= 0:
+                del self.cart[menu_id]
+            self._refresh_cart_ui()
 
     def on_click_clear_cart(self):
         """Empty the cart and refresh UI."""
@@ -328,6 +363,19 @@ class OrderScreen(QWidget):
             self.cartTable.setItem(i, 1, price_i)
             self.cartTable.setItem(i, 2, qty_i)
             self.cartTable.setItem(i, 3, subtotal_i)
+            # 조절 버튼(+/-) 추가
+            menu_id = int(it.get("menu_id") or 0)
+            control_w = QWidget()
+            hl = QHBoxLayout(control_w)
+            hl.setContentsMargins(0, 0, 0, 0)
+            hl.setSpacing(4)
+            btn_minus = QPushButton("-")
+            btn_plus = QPushButton("+")
+            btn_minus.clicked.connect(partial(self._cart_dec, menu_id))
+            btn_plus.clicked.connect(partial(self._cart_inc, menu_id))
+            hl.addWidget(btn_minus)
+            hl.addWidget(btn_plus)
+            self.cartTable.setCellWidget(i, 4, control_w)
 
         # 총합 레이블을 갱신하고 장바구니가 비어있지 않으면 주문 버튼을 활성화
         try:

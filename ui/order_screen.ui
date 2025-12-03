@@ -35,7 +35,7 @@
         <item>
          <widget class="QPushButton" name="btnReloadMenu">
           <property name="text">
-           <string>메뉴 새로고침</string>
+           <string>메뉴 수량 초기화</string>
           </property>
          </widget>
         </item>
@@ -60,13 +60,7 @@
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_cart_control">
-        <item>
-         <widget class="QPushButton" name="btnAddToCart">
-          <property name="text">
-           <string>장바구니에 담기</string>
-          </property>
-         </widget>
-        </item>
+        
         <item>
          <widget class="QPushButton" name="btnClearCart">
           <property name="text">
