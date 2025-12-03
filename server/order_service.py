@@ -4,12 +4,27 @@ DB 접근은 db/order_repo.py 만 사용해야 한다.
 """
 
 from typing import Any
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from common import enums
 from db import order_repo
 from db import inventory_repo
 from server import models
 
+KST = ZoneInfo("Asia/Seoul")
+UTC = ZoneInfo("UTC")
+
+def _utc_dt_to_kst_iso(dt: datetime | None) -> str | None:
+    """
+    DB에서 가져온 datetime(UTC 기준)을 서울 시간 ISO 문자열로 변환.
+    - dt가 naive(타임존 정보 없음)이라고 가정하고 UTC로 붙인다.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(KST).isoformat()
 
 def get_menu_list(conn) -> list[dict[str, Any]]:
     """
@@ -133,7 +148,8 @@ def create_order(conn, req: models.OrderCreate) -> dict[str, Any]:
       "order_id": row["order_id"],
       "pickup_no": row["pickup_no"],
       "status": row["status"],
-      "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+      # "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+      "ordered_at": _utc_dt_to_kst_iso(row["ordered_at"]),
     }
 
 
@@ -191,7 +207,8 @@ def get_order_queue(conn) -> list[dict[str, Any]]:
           "order_id": row.get("order_id"),
           "pickup_no": row.get("pickup_no"),
           "status": status,
-          "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+          # "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+          "ordered_at": _utc_dt_to_kst_iso(row["ordered_at"]),
           "eta_sec": int(eta_sec),
         }
       )
@@ -284,7 +301,8 @@ def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
       "order_id": row.get("order_id"),
       "pickup_no": row.get("pickup_no"),
       "status": new_status,
-      "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+      # "ordered_at": ordered_at.isoformat() if ordered_at is not None else None,
+      "ordered_at": _utc_dt_to_kst_iso(row.get("ordered_at")),
     }
 
 

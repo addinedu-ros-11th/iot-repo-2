@@ -3,11 +3,22 @@
 """
 
 from typing import Any
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from common import enums
 from db import machine_repo, order_repo
 from server import models
 
+KST = ZoneInfo("Asia/Seoul")
+UTC = ZoneInfo("UTC")
+
+def _utc_dt_to_kst_iso(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(KST).isoformat()
 
 def update_machine_status(conn, req: models.MachineStatusIn) -> dict[str, Any]:
     """
@@ -41,8 +52,9 @@ def get_machine_status(conn) -> list[dict[str, Any]]:
     rows = machine_repo.get_all_machine_status(conn)
     # datetime을 문자열로 바꿔주는 정도만 처리
     for row in rows:
-        if row.get("last_heartbeat_at"):
-            row["last_heartbeat_at"] = row["last_heartbeat_at"].isoformat()
+        # if row.get("last_heartbeat_at"):
+        #     row["last_heartbeat_at"] = row["last_heartbeat_at"].isoformat()
+        row["last_heartbeat_at"] = _utc_dt_to_kst_iso(row.get("last_heartbeat_at"))
     return rows
 
 
