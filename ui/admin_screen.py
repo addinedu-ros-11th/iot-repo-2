@@ -39,6 +39,7 @@ from PyQt6.QtWidgets import (
 import requests
 
 from config import API_BASE_URL
+from common.timeutils import format_utc_to_local
 
 
 class AdminScreen(QWidget):
@@ -302,7 +303,7 @@ class AdminScreen(QWidget):
                 plate2 = f"{plate2_state}/{plate2_temp}" if plate2_temp is not None else plate2_state
 
                 conveyor = row.get("conveyor_state", "")
-                last_hb = row.get("last_heartbeat_at") or ""
+                last_hb = format_utc_to_local(row.get("last_heartbeat_at"))
 
                 self.machineTable.setItem(i, 0, QTableWidgetItem(str(name)))
                 self.machineTable.setItem(i, 1, QTableWidgetItem(str(state)))
@@ -331,8 +332,8 @@ class AdminScreen(QWidget):
             for i, o in enumerate(data):
                 pickup = QTableWidgetItem(str(o.get("pickup_no", "")))
                 status_text = str(o.get("status", ""))
-                ordered_at = o.get("ordered_at") or ""
-                ordered_item = QTableWidgetItem(str(ordered_at))
+                ordered_at = o.get("ordered_at")
+                ordered_item = QTableWidgetItem(format_utc_to_local(ordered_at))
                 eta = QTableWidgetItem(str(o.get("eta_sec", "")))
                 # 컬럼 매핑: 0:order_id(숨김),1:pickup_no,2:status,3:ordered_at,4:eta
                 id_item = QTableWidgetItem(str(o.get("order_id", "")))
@@ -419,7 +420,7 @@ class AdminScreen(QWidget):
                 ttype_i = QTableWidgetItem(str(r.get("tx_type", "")))
                 qty_i = QTableWidgetItem(str(r.get("qty_change", "")))
                 note_i = QTableWidgetItem(str(r.get("note", "")))
-                created_i = QTableWidgetItem(str(r.get("created_at", "")))
+                created_i = QTableWidgetItem(format_utc_to_local(r.get("created_at")))
 
                 self.materialTxTable.setItem(i, 0, id_i)
                 self.materialTxTable.setItem(i, 1, mid_i)

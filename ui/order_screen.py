@@ -26,6 +26,7 @@ from functools import partial
 import requests
 
 from config import API_BASE_URL
+from common.timeutils import format_utc_to_local
 
 
 class OrderScreen(QWidget):
@@ -171,8 +172,8 @@ class OrderScreen(QWidget):
             for i, o in enumerate(data):
                 pickup = QTableWidgetItem(str(o.get("pickup_no", "")))
                 status = QTableWidgetItem(str(o.get("status", "")))
-                ordered_at = o.get("ordered_at") or ""
-                ordered_item = QTableWidgetItem(str(ordered_at))
+                ordered_at = o.get("ordered_at")
+                ordered_item = QTableWidgetItem(format_utc_to_local(ordered_at))
                 eta = QTableWidgetItem(str(o.get("eta_sec", "")))
 
                 self.queueTable.setItem(i, 0, pickup)
