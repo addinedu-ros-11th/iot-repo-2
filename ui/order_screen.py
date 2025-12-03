@@ -28,7 +28,7 @@ from config import API_BASE_URL
 
 
 class OrderScreen(QWidget):
-    # emitted after an order is successfully created (so other windows can refresh)
+    # 주문이 성공적으로 생성된 후 발생하는 신호 (다른 창이 갱신하도록)
     order_created = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -41,19 +41,19 @@ class OrderScreen(QWidget):
         self.menuTable.setColumnHidden(0, True)
 
         # 장바구니 구조 초기화
-        # cart is a dict: menu_id -> {"menu_id":..., "name":..., "price":..., "qty":...}
+        # cart는 dict: menu_id -> {"menu_id":..., "name":..., "price":..., "qty":...}
         self.cart: dict[int, dict] = {}
-        # cartTable may not exist in older UI; ensure presence
+        # 구버전 UI에는 `cartTable`이 없을 수 있으므로 존재 여부를 확인
         if hasattr(self, "cartTable"):
             self.cartTable.setColumnCount(4)
             self.cartTable.setHorizontalHeaderLabels(["메뉴명", "단가", "수량", "합계"])
 
-        # total label and buttons may be present from .ui
+        # 총합 레이블과 버튼은 .ui에서 제공될 수 있음
         if hasattr(self, "btnAddToCart"):
             self.btnAddToCart.clicked.connect(self.on_click_add_to_cart)
         if hasattr(self, "btnClearCart"):
             self.btnClearCart.clicked.connect(self.on_click_clear_cart)
-        # ensure order button disabled when cart empty
+        # 장바구니가 비어있을 때 주문 버튼을 비활성화
         try:
             self.btnOrder.setEnabled(False)
         except Exception:
@@ -76,7 +76,7 @@ class OrderScreen(QWidget):
         # 실제 구현은 load_menu / load_queue 안에서 작성
         self.load_menu()
         self.load_queue()
-        # Note: Reset control resides in AdminScreen; OrderScreen refreshes via Admin signal.
+        # 참고: 대기열 초기화 컨트롤은 AdminScreen에 있으며, OrderScreen은 Admin의 신호로 갱신됨.
     def load_menu(self):
         """
         메뉴 목록 로딩.
@@ -193,7 +193,7 @@ class OrderScreen(QWidget):
             QMessageBox.warning(self, "알림", "RFID 카드 ID가 없습니다.")
             return
 
-        # Use cart contents for ordering (cart -> menu_id, qty)
+        # 주문 시 장바구니 내용을 사용함 (cart -> menu_id, qty)
         items = []
         for menu_id, it in self.cart.items():
             try:
@@ -217,17 +217,17 @@ class OrderScreen(QWidget):
             QMessageBox.information(self, "주문 완료", f"주문이 접수되었습니다. 픽업 번호: {pickup_no}")
 
             # 초기화 및 대기열 갱신
-            # reset menuTable quantities to 0
+            # menuTable의 수량을 0으로 초기화
             row_count = self.menuTable.rowCount()
             for i in range(row_count):
                 self.menuTable.setItem(i, 3, QTableWidgetItem("0"))
-            # clear cart after successful order
+            # 주문 성공 후 장바구니 비우기
             try:
                 self.on_click_clear_cart()
             except Exception:
                 pass
             self.load_queue()
-            # notify other windows (e.g., AdminScreen) to refresh materials
+            # 다른 창들(예: AdminScreen)에 재고 갱신을 알림
             try:
                 self.order_created.emit()
             except Exception:
@@ -281,12 +281,12 @@ class OrderScreen(QWidget):
                 continue
             if qty <= 0:
                 continue
-            # merge into cart
+            # 장바구니에 합치기(병합)
             if menu_id in self.cart:
                 self.cart[menu_id]["qty"] += qty
             else:
                 self.cart[menu_id] = {"menu_id": menu_id, "name": name, "price": price, "qty": qty}
-            # reset menu qty to 0
+            # 메뉴 수량을 0으로 초기화
             self.menuTable.setItem(i, 3, QTableWidgetItem("0"))
             added = True
 
@@ -299,10 +299,10 @@ class OrderScreen(QWidget):
     def on_click_clear_cart(self):
         """Empty the cart and refresh UI."""
         self.cart.clear()
-        # clear cartTable rows
+        # cartTable의 행을 지움
         if hasattr(self, "cartTable"):
             self.cartTable.setRowCount(0)
-        # update total and disable order button
+        # 총합을 갱신하고 주문 버튼 상태를 업데이트(비활성화)
         try:
             if hasattr(self, "lblTotal"):
                 self.lblTotal.setText("총합: 0")
@@ -329,7 +329,7 @@ class OrderScreen(QWidget):
             self.cartTable.setItem(i, 2, qty_i)
             self.cartTable.setItem(i, 3, subtotal_i)
 
-        # update total label and enable order button if not empty
+        # 총합 레이블을 갱신하고 장바구니가 비어있지 않으면 주문 버튼을 활성화
         try:
             if hasattr(self, "lblTotal"):
                 self.lblTotal.setText(f"총합: {total}")

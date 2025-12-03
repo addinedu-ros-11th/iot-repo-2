@@ -13,19 +13,19 @@ from ui.order_screen import OrderScreen
 def main():
     app = QApplication(sys.argv)
 
-    # Open both Admin and Order screens in separate windows
+    # Admin 및 Order 화면을 각각의 창으로 엶
     admin_win = AdminScreen()
     admin_win.show()
 
     order_win = OrderScreen()
     order_win.show()
-    # connect admin reset signal to order screen reload so both stay in sync
+    # Admin의 초기화 신호를 Order 화면의 로드에 연결하여 동기화 유지
     try:
         admin_win.queue_reset.connect(order_win.load_queue)
     except Exception:
         pass
 
-    # connect order created signal to admin materials reload so consumed stock appears in Admin UI
+    # 주문 생성 신호를 Admin의 재고 로드에 연결하여 소모된 재고가 Admin UI에 반영되도록 함
     try:
         order_win.order_created.connect(admin_win.load_materials)
     except Exception:

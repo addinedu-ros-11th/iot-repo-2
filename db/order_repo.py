@@ -1,4 +1,4 @@
-# db/order_repo.py
+# db/order_repo.py - 메뉴/주문 관련 DB 접근 함수 모음
 """
 menu, orders, order_detail 관련 DB 접근 함수.
 비즈니스 로직은 server/order_service.py 에서 처리한다.
@@ -108,7 +108,7 @@ def get_order_items(conn, order_id: int) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute(sql, (order_id,))
         rows = cur.fetchall()
-    # normalize to dicts with keys menu_id and qty
+    # menu_id와 qty 키를 가진 dict 형태로 정규화
     result = []
     for r in rows:
         if isinstance(r, dict):
@@ -178,12 +178,12 @@ def reset_order_queue(conn) -> int:
         if not ids:
             return 0
 
-        # delete order_detail entries
+        # order_detail 항목을 삭제
         placeholders = ",".join(["%s"] * len(ids))
         sql_delete_details = f"DELETE FROM order_detail WHERE order_id IN ({placeholders})"
         cur.execute(sql_delete_details, ids)
 
-        # delete orders
+        # orders 항목을 삭제
         sql_delete_orders = f"DELETE FROM orders WHERE id IN ({placeholders})"
         cur.execute(sql_delete_orders, ids)
         deleted = cur.rowcount

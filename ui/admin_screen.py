@@ -42,7 +42,7 @@ from config import API_BASE_URL
 
 
 class AdminScreen(QWidget):
-    # Signal emitted when the queue is reset so other windows can react
+    # 대기열이 초기화되었을 때 다른 창이 반응할 수 있도록 발생시키는 신호
     queue_reset = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -64,18 +64,18 @@ class AdminScreen(QWidget):
         self.btnReloadMaterials.clicked.connect(self.load_materials)
         self.btnRestock.clicked.connect(self.on_click_restock)
         self.btnReloadMachine.clicked.connect(self.load_machine_status)
-        # Emergency stop / Restart buttons (UI-only handlers)
+        # 비상정지 / 재시작 버튼 (UI 전용 핸들러)
         if hasattr(self, "btnEmergencyStop"):
             self.btnEmergencyStop.clicked.connect(self.on_click_emergency_stop)
             try:
-                # red button for emergency
+                # 비상용 빨간 버튼
                 self.btnEmergencyStop.setStyleSheet("background-color: #d9534f; color: white; font-weight: bold;")
             except Exception:
                 pass
         if hasattr(self, "btnRestartMachine"):
             self.btnRestartMachine.clicked.connect(self.on_click_restart_machine)
             try:
-                # blue button for restart
+                # 재시작용 파란 버튼
                 self.btnRestartMachine.setStyleSheet("background-color: #337ab7; color: white; font-weight: bold;")
             except Exception:
                 pass
@@ -86,7 +86,7 @@ class AdminScreen(QWidget):
         self.machine_timer.start(3000)
 
         # 실시간 대기열 테이블 (OrderScreen과 동일한 컬럼)
-        # Ensure queueTable exists (UI might be missing it). If missing, create and append to main layout.
+        # queueTable이 존재하는지 확인 (UI에 없을 수 있음). 없으면 생성하여 메인 레이아웃에 추가
         if not hasattr(self, "queueTable") or self.queueTable is None:
             gb = QGroupBox("실시간 대기열")
             gb_layout = QVBoxLayout()
@@ -94,14 +94,14 @@ class AdminScreen(QWidget):
             qt.setObjectName("queueTable")
             gb_layout.addWidget(qt)
             gb.setLayout(gb_layout)
-            # add to the main layout if available
+            # 가능한 경우 메인 레이아웃에 추가
             main_layout = self.layout()
             if main_layout is not None:
                 main_layout.addWidget(gb)
             self.queueTable = qt
 
         self.queueTable.setColumnCount(4)
-        # store order_id in hidden column 0 for operations; visible columns shifted by 1
+        # 작업용으로 숨긴 컬럼 0에 order_id를 저장; 표시되는 컬럼은 1씩 밀림
         self.queueTable.setColumnCount(5)
         self.queueTable.setHorizontalHeaderLabels(["ID", "픽업번호", "상태", "주문시각", "ETA(초)"])
         self.queueTable.setColumnHidden(0, True)
@@ -111,17 +111,17 @@ class AdminScreen(QWidget):
         self.queue_timer.timeout.connect(self.load_queue)
         self.queue_timer.start(3000)
 
-        # material tx table (log) setup
+        # 재료 트랜잭션 테이블(로그) 설정
         if hasattr(self, "materialTxTable"):
             self.materialTxTable.setColumnCount(8)
             self.materialTxTable.setHorizontalHeaderLabels(["ID", "재료ID", "재료명", "주문ID", "타입", "수량변동", "메모", "시간"])
             self.materialTxTable.setColumnHidden(1, False)
-            # prefer resizing: show other columns to contents, let '시간' expand
+            # 컬럼 크기 조정: 다른 컬럼은 내용에 맞게, '시간' 컬럼은 확장
             try:
                 header = self.materialTxTable.horizontalHeader()
                 for col in range(0, 7):
                     header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
-                # last column (시간) should stretch to avoid truncation
+                # 마지막 컬럼('시간')은 잘림을 피하기 위해 확장하도록 설정
                 header.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
             except Exception:
                 pass
@@ -129,7 +129,7 @@ class AdminScreen(QWidget):
         if hasattr(self, "btnReloadMaterialTx"):
             self.btnReloadMaterialTx.clicked.connect(self.load_material_tx)
 
-        # reset button connection (may come from .ui)
+        # 초기화 버튼 연결 (.ui에서 생성되었을 수 있음)
         if hasattr(self, "btnResetQueue"):
             self.btnResetQueue.clicked.connect(self.on_click_reset_queue)
         if hasattr(self, "btnCancelSelected"):
@@ -139,7 +139,7 @@ class AdminScreen(QWidget):
         self.load_materials()
         self.load_machine_status()
         self.load_queue()
-        # load material transaction logs
+        # 재료 트랜잭션 로그 로드
         try:
             self.load_material_tx()
         except Exception:
@@ -242,7 +242,7 @@ class AdminScreen(QWidget):
             resp.raise_for_status()
             QMessageBox.information(self, "완료", "재고가 변경되었습니다.")
             self.load_materials()
-            # refresh material transaction log so admin sees the new tx immediately
+            # 재료 트랜잭션 로그를 새로고침하여 관리자가 트랜잭션을 즉시 볼 수 있도록 함
             try:
                 self.load_material_tx()
             except Exception:
@@ -334,17 +334,17 @@ class AdminScreen(QWidget):
                 ordered_at = o.get("ordered_at") or ""
                 ordered_item = QTableWidgetItem(str(ordered_at))
                 eta = QTableWidgetItem(str(o.get("eta_sec", "")))
-                # column mapping: 0:order_id(hidden),1:pickup_no,2:status,3:ordered_at,4:eta
+                # 컬럼 매핑: 0:order_id(숨김),1:pickup_no,2:status,3:ordered_at,4:eta
                 id_item = QTableWidgetItem(str(o.get("order_id", "")))
                 self.queueTable.setItem(i, 0, id_item)
                 self.queueTable.setItem(i, 1, pickup)
 
-                # create a combobox for status to allow inline editing
+                # 인라인 편집을 허용하기 위해 상태용 콤보박스 생성
                 try:
                     combo = QComboBox()
                     statuses = ["PENDING", "COOKING", "DONE", "PICKED_UP", "CANCELED"]
                     combo.addItems(statuses)
-                    # set current without emitting signals
+                    # 신호를 발생시키지 않고 현재값 설정
                     combo.blockSignals(True)
                     if status_text in statuses:
                         combo.setCurrentText(status_text)
@@ -352,17 +352,17 @@ class AdminScreen(QWidget):
                         combo.addItem(status_text)
                         combo.setCurrentText(status_text)
                     combo.setProperty("prev", status_text)
-                    # store order id for handler
+                    # 핸들러를 위해 order id를 속성에 저장
                     try:
                         combo.setProperty("order_id", int(o.get("order_id") or 0))
                     except Exception:
                         combo.setProperty("order_id", 0)
                     combo.blockSignals(False)
-                    # connect handler
+                    # 핸들러 연결
                     combo.currentTextChanged.connect(lambda new, c=combo: self.on_status_combo_changed(c, new))
                     self.queueTable.setCellWidget(i, 2, combo)
                 except Exception:
-                    # fallback to plain item if combobox fails
+                    # 콤보박스 생성에 실패하면 일반 아이템으로 대체
                     self.queueTable.setItem(i, 2, QTableWidgetItem(status_text))
 
                 self.queueTable.setItem(i, 3, ordered_item)
@@ -389,9 +389,9 @@ class AdminScreen(QWidget):
             data = resp.json()
             deleted = data.get("deleted_orders")
             QMessageBox.information(self, "완료", f"대기열이 초기화되었습니다. 삭제된 주문: {deleted}")
-            # reload local view
+            # 로컬 뷰 재로드
             self.load_queue()
-            # notify other components (e.g., OrderScreen) to refresh
+            # 다른 컴포넌트(예: OrderScreen)에 갱신 알림
             try:
                 self.queue_reset.emit()
             except Exception:
@@ -430,7 +430,7 @@ class AdminScreen(QWidget):
                 self.materialTxTable.setItem(i, 6, note_i)
                 self.materialTxTable.setItem(i, 7, created_i)
         except Exception:
-            # ignore periodic UI errors
+            # 주기적으로 발생하는 UI 오류는 무시
             return
 
     def on_status_combo_changed(self, combo, new_status: str):
@@ -451,7 +451,7 @@ class AdminScreen(QWidget):
         try:
             resp = requests.patch(f"{API_BASE_URL}/api/admin/orders/{order_id}/status", json={"status": new_status}, timeout=10)
             resp.raise_for_status()
-            # success: update prev and refresh related views
+            # 성공 시 이전 값 업데이트 및 관련 뷰 갱신
             combo.setProperty("prev", new_status)
             try:
                 self.load_queue()
@@ -471,7 +471,7 @@ class AdminScreen(QWidget):
                 pass
         except Exception as e:
             QMessageBox.critical(self, "오류", f"상태 변경에 실패했습니다:\n{e}")
-            # revert selection
+            # 선택 복원
             try:
                 combo.blockSignals(True)
                 combo.setCurrentText(prev)
@@ -499,7 +499,7 @@ class AdminScreen(QWidget):
             QMessageBox.warning(self, "알림", "유효한 주문 ID가 아닙니다.")
             return
 
-        # status might be a QTableWidgetItem (old) or a QComboBox (new)
+        # status는 이전에는 QTableWidgetItem, 새 버전에서는 QComboBox일 수 있음
         status = ""
         try:
             status_widget = self.queueTable.cellWidget(row, 2)
@@ -526,14 +526,14 @@ class AdminScreen(QWidget):
             resp = requests.patch(f"{API_BASE_URL}/api/orders/{order_id}/status", json={"status": "CANCELED"}, timeout=10)
             resp.raise_for_status()
             QMessageBox.information(self, "완료", "주문이 취소되었습니다.")
-            # refresh local queue view and notify others
+            # 로컬 대기열 뷰 갱신 및 다른 창에 알림
             self.load_queue()
-            # refresh material stock view so restored quantities are visible
+            # 재고 뷰를 갱신하여 복구된 수량이 보이도록 함
             try:
                 self.load_materials()
             except Exception:
                 pass
-            # refresh material transaction log so RESTOCK entries appear immediately
+            # 재료 트랜잭션 로그를 갱신하여 RESTOCK 항목이 즉시 보이도록 함
             try:
                 self.load_material_tx()
             except Exception:
