@@ -34,6 +34,19 @@ def insert_material_tx(
 
 
 def update_material_stock(conn, material_id: int, qty_change: int) -> int:
+    """재고 수량 업데이트. 재고가 음수가 되는 것을 방지."""
+    # 재고 부족 체크 (소비 시)
+    if qty_change < 0:
+        sql_check = "SELECT qty, name FROM material_stock WHERE id = %s"
+        with conn.cursor() as cur:
+            cur.execute(sql_check, (material_id,))
+            row = cur.fetchone()
+            if row:
+                current_qty = row.get("qty") if isinstance(row, dict) else row[0]
+                material_name = row.get("name") if isinstance(row, dict) else (row[1] if len(row) > 1 else "")
+                if current_qty + qty_change < 0:
+                    raise ValueError(f"재고 부족: {material_name} (현재: {current_qty}, 필요: {-qty_change})")
+    
     sql = """
     UPDATE material_stock
     SET qty = qty + %s

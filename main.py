@@ -34,6 +34,12 @@ def main():
         order_win.order_created.connect(admin_win.load_material_tx)
     except Exception:
         pass
+    
+    # 주문 상태 변경/취소 시 OrderScreen도 대기열 갱신하도록 연결
+    try:
+        admin_win.order_changed.connect(order_win.load_queue)
+    except Exception:
+        pass
 
     sys.exit(app.exec())
 

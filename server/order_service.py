@@ -105,20 +105,23 @@ def create_order(conn, req: models.OrderCreate) -> dict[str, Any]:
             continue
           material_usage[mid] = material_usage.get(mid, 0) + total_use
 
-      # 재료 트랜잭션과 재고 업데이트 적용
-      for material_id, total in material_usage.items():
-        # qty_change는 소비의 경우 음수임
-        qty_change = -int(total)
-        note = f"Order:{order_id}"
-        # 트랜잭션 기록 (order_id 포함)
-        inventory_repo.insert_material_tx(conn, material_id, "CONSUME", qty_change, note, order_id)
-        # 재고 갱신
-        inventory_repo.update_material_stock(conn, material_id, qty_change)
-    except Exception:
-      # 재고 업데이트에 실패하면 예외를 발생시켜 주문 생성 전체를 롤백함
-      raise
-
-    # 4) commit
+        # 재료 트랜잭션과 재고 업데이트 적용
+        for material_id, total in material_usage.items():
+            # qty_change는 소비의 경우 음수임
+            qty_change = -int(total)
+            note = f"Order:{order_id}"
+            # 트랜잭션 기록 (order_id 포함)
+            inventory_repo.insert_material_tx(conn, material_id, "CONSUME", qty_change, note, order_id)
+            # 재고 갱신 (재고 부족 시 ValueError 발생)
+            inventory_repo.update_material_stock(conn, material_id, qty_change)
+    except ValueError as e:
+        # 재고 부족 시 명확한 메시지와 함께 예외 발생
+        print(f"[OrderService] 재고 부족으로 주문 생성 실패: {e}")
+        raise ValueError(f"INSUFFICIENT_STOCK: {str(e)}")
+    except Exception as e:
+        # 재고 업데이트에 실패하면 예외를 발생시켜 주문 생성 전체를 롤백함
+        print(f"[OrderService] 주문 생성 중 재고 처리 실패: {e}")
+        raise    # 4) commit
     conn.commit()
 
     # 5) 조회
@@ -264,10 +267,15 @@ def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
       for material_id, total in material_usage.items():
         qty_change = int(total)
         note = f"CancelOrder:{order_id}"
-        # 취소 시 RESTOCK 트랜잭션을 기록하여 재고를 복구함 (order_id 포함)
-        inventory_repo.insert_material_tx(conn, material_id, "RESTOCK", qty_change, note, order_id)
-        # 사용된 양을 더하여 재고를 갱신함
-        inventory_repo.update_material_stock(conn, material_id, qty_change)
+        try:
+          # 취소 시 RESTOCK 트랜잭션을 기록하여 재고를 복구함 (order_id 포함)
+          inventory_repo.insert_material_tx(conn, material_id, "RESTOCK", qty_change, note, order_id)
+          # 사용된 양을 더하여 재고를 갱신함
+          inventory_repo.update_material_stock(conn, material_id, qty_change)
+        except Exception as e:
+          print(f"[OrderService] 주문 취소 중 재고 복구 실패 (material_id={material_id}): {e}")
+          # 재고 복구 실패 시에도 예외를 발생시켜 트랜잭션 롤백
+          raise
 
     # 5) 상태 변경
     affected = order_repo.update_order_status(conn, order_id, new_status)

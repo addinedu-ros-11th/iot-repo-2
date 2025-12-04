@@ -252,10 +252,8 @@ class OrderScreen(QWidget):
         self.btnReloadMenu.clicked.connect(self.load_menu)
         self.btnOrder.clicked.connect(self.on_click_order)
 
-        # 대기열 주기적 갱신 타이머 (3초)
-        self.queue_timer = QTimer(self)
-        self.queue_timer.timeout.connect(self.load_queue)
-        self.queue_timer.start(3000)
+        # 대기열은 AdminScreen의 타이머와 신호로 갱신됨 (중복 제거)
+        # self.queue_timer 제거: AdminScreen이 queue_reset 신호로 갱신 트리거
 
         # 초기에 한 번 로딩
         # 실제 구현은 load_menu / load_queue 안에서 작성
@@ -353,6 +351,7 @@ class OrderScreen(QWidget):
             except Exception:
                 pass
         except Exception as e:
+            print(f"[OrderScreen] 메뉴 로드 실패: {e}")
             QMessageBox.critical(self, "오류", f"메뉴를 불러오지 못했습니다:\n{e}")
 
     def load_queue(self):
@@ -397,8 +396,9 @@ class OrderScreen(QWidget):
             
             self.queueTable.resizeRowsToContents()
             self.queueTable.resizeColumnsToContents()
-        except Exception:
-            # 주기적 갱신 중 에러는 조용히 무시
+        except Exception as e:
+            # 주기적 갱신 중 에러는 조용히 무시하되 로깅
+            print(f"[OrderScreen] 대기열 로드 실패: {e}")
             return
 
     def on_click_order(self):
@@ -524,6 +524,7 @@ class OrderScreen(QWidget):
             except Exception:
                 pass
         except Exception as e:
+            print(f"[OrderScreen] 주문 처리 실패: {e}")
             QMessageBox.critical(self, "오류", f"주문에 실패했습니다:\n{e}")
 
     def on_click_reset_queue(self):

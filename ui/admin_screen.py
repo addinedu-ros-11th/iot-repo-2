@@ -415,6 +415,7 @@ class AdminScreen(QWidget):
             self.materialsTable.resizeRowsToContents()
             self.materialsTable.resizeColumnsToContents()
         except Exception as e:
+            print(f"[AdminScreen] 재고 목록 로드 실패: {e}")
             QMessageBox.critical(self, "오류", f"재고 목록을 불러오지 못했습니다:\n{e}")
 
     def on_click_increase_qty(self):
@@ -553,8 +554,9 @@ class AdminScreen(QWidget):
             
             self.machineTable.resizeRowsToContents()
             self.machineTable.resizeColumnsToContents()
-        except Exception:
+        except Exception as e:
             # 조용히 무시 (UI 주기 갱신 중 에러가 발생해도 사용자에게 계속 방해하지 않음)
+            print(f"[AdminScreen] 머신 상태 로드 실패: {e}")
             return
 
     def load_queue(self):
@@ -612,8 +614,9 @@ class AdminScreen(QWidget):
             
             self.queueTable.resizeRowsToContents()
             self.queueTable.resizeColumnsToContents()
-        except Exception:
-            # 주기적 갱신 중 에러는 조용히 무시
+        except Exception as e:
+            # 주기적 갱신 중 에러는 조용히 무시하되 로깅
+            print(f"[AdminScreen] 대기열 로드 실패: {e}")
             return
     def on_click_reset_queue(self):
         """관리자 UI에서 대기열 초기화 버튼 핸들러
@@ -652,6 +655,8 @@ class AdminScreen(QWidget):
             resp = requests.get(f"{API_BASE_URL}/api/materials/txs", timeout=5)
             resp.raise_for_status()
             data = resp.json()
+            # 성능 최적화: 최근 100개만 표시
+            data = data[-100:] if len(data) > 100 else data
 
             self.materialTxTable.setRowCount(len(data))
             for i, r in enumerate(data):
@@ -683,8 +688,9 @@ class AdminScreen(QWidget):
             
             # 행 높이만 조정 (컬럼 너비는 초기화 시 설정한 ResizeMode 유지)
             self.materialTxTable.resizeRowsToContents()
-        except Exception:
-            # 주기적으로 발생하는 UI 오류는 무시
+        except Exception as e:
+            # 주기적으로 발생하는 UI 오류는 무시하되 로깅
+            print(f"[AdminScreen] 재료 트랜잭션 로드 실패: {e}")
             return
 
     def on_status_combo_changed(self, combo, new_status: str):
