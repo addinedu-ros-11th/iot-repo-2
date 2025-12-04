@@ -20,13 +20,20 @@ API:
 import os
 
 from PyQt6 import uic
-from PyQt6.QtCore import QTimer, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem, QPushButton, QHBoxLayout, QGridLayout, QSizePolicy, QVBoxLayout
+from PyQt6.QtCore import QTimer, pyqtSignal, Qt
+from PyQt6.QtWidgets import QWidget, QMessageBox, QTableWidgetItem, QPushButton, QHBoxLayout, QGridLayout, QSizePolicy, QVBoxLayout, QDialog, QLabel
 from functools import partial
 import requests
 
 from config import API_BASE_URL
 from common.timeutils import format_utc_to_local
+
+try:
+    from machine_link.rfid_reader import RFIDReader
+    RFID_AVAILABLE = True
+except Exception:
+    RFID_AVAILABLE = False
+    print("[OrderScreen] RFID 리더 모듈을 불러올 수 없습니다. RFID 기능이 비활성화됩니다.")
 
 
 class OrderScreen(QWidget):
@@ -255,6 +262,21 @@ class OrderScreen(QWidget):
         self.load_menu()
         self.load_queue()
         # 참고: 대기열 초기화 컨트롤은 AdminScreen에 있으며, OrderScreen은 Admin의 신호로 갱신됨.
+        
+        # RFID 리더 초기화 및 시작
+        self.rfid_reader = None
+        self.waiting_for_card = False  # 카드 태그 대기 중 플래그
+        self.card_wait_dialog = None   # 카드 대기 다이얼로그
+        self.pending_order_items = []  # 대기 중인 주문 항목
+        if RFID_AVAILABLE:
+            try:
+                self.rfid_reader = RFIDReader()
+                self.rfid_reader.card_detected.connect(self._on_rfid_card_detected)
+                self.rfid_reader.start()
+                print("[OrderScreen] RFID 리더가 시작되었습니다.")
+            except Exception as e:
+                print(f"[OrderScreen] RFID 리더 시작 실패: {e}")
+                self.rfid_reader = None
     def load_menu(self):
         """
         메뉴 목록 로딩.
@@ -381,54 +403,107 @@ class OrderScreen(QWidget):
 
     def on_click_order(self):
         """
-        주문 버튼 클릭 시 동작.
-
-        요구사항:
-        1) self.txtRfid 에서 RFID 카드 ID 문자열 읽기
-           - 비어 있으면 메시지 박스로 "RFID 카드 ID가 없습니다." 표시 후 종료
-        2) self.menuTable 의 각 row 에 대해:
-           - col0: menu_id (int로 변환)
-           - col3: 수량(qty, int로 변환)
-           - qty > 0 인 row만 수집
-        3) 수집된 items 가 하나도 없으면
-           - "수량이 1 이상인 메뉴가 없습니다." 메시지 후 종료
-        4) payload 생성:
-           {
-             "rfid_card_id": <txtRfid 값>,
-             "items": [
-               { "menu_id": <int>, "qty": <int> },
-               ...
-             ]
-           }
-        5) POST {API_BASE_URL}/api/orders 에 payload 를 JSON 으로 전송
-           - 성공 시 응답 JSON 에서 pickup_no 읽기
-           - QMessageBox 로 "주문이 접수되었습니다. 픽업 번호: XXX" 표시
-        6) 주문 성공 후:
-           - self.menuTable 의 모든 수량(col3)을 "0"으로 초기화
-           - self.load_queue() 호출로 대기열 갱신
-        7) 실패 시:
-           - 메시지 박스로 에러 내용 표시
+        주문하기 버튼 클릭 시 실행.
+        카드 태그 대기 모달을 띄우고, 카드가 태그되면 주문 처리.
         """
-        rfid = self.txtRfid.text().strip()
-        if not rfid:
-            QMessageBox.warning(self, "알림", "RFID 카드 ID가 없습니다.")
-            return
-
-        # 주문 시 장바구니 내용을 사용함 (cart -> menu_id, qty)
-        items = []
+        items_to_order = []
         for menu_id, it in self.cart.items():
             try:
                 qty = int(it.get("qty", 0))
             except Exception:
                 qty = 0
             if qty > 0:
-                items.append({"menu_id": int(menu_id), "qty": qty})
+                items_to_order.append({"menu_id": int(menu_id), "qty": qty})
 
-        if not items:
+        if not items_to_order:
             QMessageBox.information(self, "알림", "장바구니가 비어 있습니다. 먼저 장바구니에 담아주세요.")
             return
 
-        payload = {"rfid_card_id": rfid, "items": items}
+        # RFID 리더가 없으면 카드 없이 주문
+        if not RFID_AVAILABLE or not self.rfid_reader:
+            self._process_order(items_to_order, "")
+            return
+
+        # 카드 태그 대기 모달 표시
+        self._show_card_wait_dialog(items_to_order)
+
+    def _show_card_wait_dialog(self, items_to_order):
+        """카드 태그 대기 다이얼로그 표시"""
+        self.waiting_for_card = True
+        self.pending_order_items = items_to_order
+        
+        # 모달 다이얼로그 생성
+        self.card_wait_dialog = QDialog(self)
+        self.card_wait_dialog.setWindowTitle("결제 대기")
+        self.card_wait_dialog.setModal(True)
+        self.card_wait_dialog.setFixedSize(400, 200)
+        
+        layout = QVBoxLayout()
+        
+        # 안내 메시지
+        label = QLabel("💳 카드를 태그해주세요")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet("""
+            QLabel {
+                font-size: 24pt;
+                font-weight: bold;
+                color: #8B4513;
+                padding: 20px;
+            }
+        """)
+        layout.addWidget(label)
+        
+        # 타임아웃 안내
+        timeout_label = QLabel("30초 내에 태그하지 않으면 자동 취소됩니다")
+        timeout_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        timeout_label.setStyleSheet("color: #666; font-size: 10pt;")
+        layout.addWidget(timeout_label)
+        
+        # 취소 버튼
+        cancel_btn = QPushButton("취소")
+        cancel_btn.clicked.connect(self._cancel_card_wait)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #CCC;
+                color: #333;
+                border: none;
+                border-radius: 5px;
+                padding: 10px;
+                font-size: 12pt;
+            }
+            QPushButton:hover {
+                background-color: #BBB;
+            }
+        """)
+        layout.addWidget(cancel_btn)
+        
+        self.card_wait_dialog.setLayout(layout)
+        
+        # 30초 타임아웃 타이머
+        self.card_timeout_timer = QTimer()
+        self.card_timeout_timer.setSingleShot(True)
+        self.card_timeout_timer.timeout.connect(self._on_card_timeout)
+        self.card_timeout_timer.start(30000)  # 30초
+        
+        self.card_wait_dialog.show()
+    
+    def _cancel_card_wait(self):
+        """카드 태그 대기 취소"""
+        self.waiting_for_card = False
+        if hasattr(self, 'card_timeout_timer') and self.card_timeout_timer:
+            self.card_timeout_timer.stop()
+        if self.card_wait_dialog:
+            self.card_wait_dialog.close()
+            self.card_wait_dialog = None
+    
+    def _on_card_timeout(self):
+        """카드 태그 타임아웃"""
+        self._cancel_card_wait()
+        QMessageBox.warning(self, "시간 초과", "카드 태그 시간이 초과되었습니다.\n다시 시도해주세요.")
+    
+    def _process_order(self, items_to_order, card_id):
+        """실제 주문 처리"""
+        payload = {"rfid_card_id": card_id, "items": items_to_order}
 
         try:
             resp = requests.post(f"{API_BASE_URL}/api/orders", json=payload, timeout=5)
@@ -438,8 +513,6 @@ class OrderScreen(QWidget):
             QMessageBox.information(self, "주문 완료", f"주문이 접수되었습니다. 픽업 번호: {pickup_no}")
 
             # 초기화 및 대기열 갱신
-            # 메뉴 테이블의 '추가' 버튼은 그대로 두고, 장바구니만 초기화
-            # 주문 성공 후 장바구니 비우기
             try:
                 self.on_click_clear_cart()
             except Exception:
@@ -641,4 +714,26 @@ class OrderScreen(QWidget):
             else:
                 self.cart[menu_id]["qty"] = new_qty
             self._refresh_cart_ui()
+    
+    def _on_rfid_card_detected(self, card_uid: str):
+        """RFID 카드가 인식되었을 때 호출되는 슬롯"""
+        print(f"[OrderScreen] RFID 카드 인식: {card_uid}")
+        
+        # 카드 대기 중이면 주문 처리
+        if self.waiting_for_card:
+            self.waiting_for_card = False
+            if self.card_timeout_timer:
+                self.card_timeout_timer.stop()
+            if self.card_wait_dialog:
+                self.card_wait_dialog.close()
+                self.card_wait_dialog = None
+            
+            # 주문 처리
+            self._process_order(self.pending_order_items, card_uid)
+    
+    def closeEvent(self, event):
+        """창이 닫힐 때 RFID 리더 정리"""
+        if self.rfid_reader:
+            self.rfid_reader.stop()
+        event.accept()
 
