@@ -189,3 +189,14 @@ def reset_order_queue(conn) -> int:
         deleted = cur.rowcount
 
     return deleted
+
+def get_total_qty_by_order_id(conn, order_id: int) -> int:
+    sql = """
+    SELECT COALESCE(SUM(qty), 0) AS total_qty
+    FROM order_detail
+    WHERE order_id = %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (order_id,))
+        row = cur.fetchone()
+        return row["total_qty"]

@@ -126,3 +126,15 @@ def handle_machine_event(conn, req: models.MachineEventIn) -> dict[str, Any]:
 
     conn.commit()
     return {"ok": True}
+
+
+# ==============================================
+def get_next_order_for_machine(db=None):
+    # :흰색_확인_표시: 테스트용 더미 데이터
+    return {
+        "order_id": 999,
+        "pickup_no": 199,
+        "status": "PENDING",
+        "menu_code": "RED_BEAN",
+        "qty": 1
+    }

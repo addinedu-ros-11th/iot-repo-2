@@ -302,3 +302,20 @@ def reset_order_queue(conn) -> dict[str, Any]:
     deleted = order_repo.reset_order_queue(conn)
     conn.commit()
     return {"deleted_orders": int(deleted)}
+
+def get_order_for_machine(conn, order_id: int) -> dict:
+    order = order_repo.get_order_by_id(conn, order_id)
+    if not order:
+        raise ValueError("ORDER_NOT_FOUND")
+    total_qty = order_repo.get_total_qty_by_order_id(conn, order_id)
+    # 2플레이트 기준 자동 분배
+    plate1 = total_qty // 2
+    plate2 = total_qty - plate1
+    return {
+        "order_id": order["order_id"],
+        "pickup_no": order["pickup_no"],
+        "total_qty": total_qty,
+        "plate1_qty": plate1,
+        "plate2_qty": plate2,
+        "status": order["status"]
+    }
