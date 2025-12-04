@@ -644,10 +644,18 @@ class AdminScreen(QWidget):
                 id_i = QTableWidgetItem(str(r.get("id", "")))
                 mid_i = QTableWidgetItem(str(r.get("material_id", "")))
                 mname_i = QTableWidgetItem(str(r.get("material_name", "")))
-                order_i = QTableWidgetItem(str(r.get("order_id", "")))
+                
+                # order_id가 None이면 빈 문자열로 표시
+                order_id_val = r.get("order_id")
+                order_i = QTableWidgetItem("" if order_id_val is None else str(order_id_val))
+                
                 ttype_i = QTableWidgetItem(str(r.get("tx_type", "")))
                 qty_i = QTableWidgetItem(str(r.get("qty_change", "")))
-                note_i = QTableWidgetItem(str(r.get("note", "")))
+                
+                # note가 None이면 빈 문자열로 표시
+                note_val = r.get("note")
+                note_i = QTableWidgetItem("" if note_val is None else str(note_val))
+                
                 created_i = QTableWidgetItem(format_utc_to_local(r.get("created_at")))
 
                 self.materialTxTable.setItem(i, 0, id_i)
@@ -659,8 +667,8 @@ class AdminScreen(QWidget):
                 self.materialTxTable.setItem(i, 6, note_i)
                 self.materialTxTable.setItem(i, 7, created_i)
             
+            # 행 높이만 조정 (컬럼 너비는 초기화 시 설정한 ResizeMode 유지)
             self.materialTxTable.resizeRowsToContents()
-            self.materialTxTable.resizeColumnsToContents()
         except Exception:
             # 주기적으로 발생하는 UI 오류는 무시
             return

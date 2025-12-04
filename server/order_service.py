@@ -110,8 +110,8 @@ def create_order(conn, req: models.OrderCreate) -> dict[str, Any]:
         # qty_change는 소비의 경우 음수임
         qty_change = -int(total)
         note = f"Order:{order_id}"
-        # 트랜잭션 기록
-        inventory_repo.insert_material_tx(conn, material_id, "CONSUME", qty_change, note)
+        # 트랜잭션 기록 (order_id 포함)
+        inventory_repo.insert_material_tx(conn, material_id, "CONSUME", qty_change, note, order_id)
         # 재고 갱신
         inventory_repo.update_material_stock(conn, material_id, qty_change)
     except Exception:
@@ -264,8 +264,8 @@ def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
       for material_id, total in material_usage.items():
         qty_change = int(total)
         note = f"CancelOrder:{order_id}"
-        # 취소 시 RESTOCK 트랜잭션을 기록하여 재고를 복구함
-        inventory_repo.insert_material_tx(conn, material_id, "RESTOCK", qty_change, note)
+        # 취소 시 RESTOCK 트랜잭션을 기록하여 재고를 복구함 (order_id 포함)
+        inventory_repo.insert_material_tx(conn, material_id, "RESTOCK", qty_change, note, order_id)
         # 사용된 양을 더하여 재고를 갱신함
         inventory_repo.update_material_stock(conn, material_id, qty_change)
 

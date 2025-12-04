@@ -22,13 +22,14 @@ def insert_material_tx(
     tx_type: str,
     qty_change: int,
     note: str | None,
+    order_id: int | None = None,
 ) -> int:
     sql = """
     INSERT INTO material_tx (material_id, order_id, tx_type, qty_change, note, created_at)
-    VALUES (%s, NULL, %s, %s, %s, NOW())
+    VALUES (%s, %s, %s, %s, %s, NOW())
     """
     with conn.cursor() as cur:
-        cur.execute(sql, (material_id, tx_type, qty_change, note))
+        cur.execute(sql, (material_id, order_id, tx_type, qty_change, note))
         return cur.lastrowid
 
 
