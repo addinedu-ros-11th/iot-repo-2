@@ -45,6 +45,8 @@ from common.timeutils import format_utc_to_local
 class AdminScreen(QWidget):
     # 대기열이 초기화되었을 때 다른 창이 반응할 수 있도록 발생시키는 신호
     queue_reset = pyqtSignal()
+    # 주문 상태 변경/취소 시 발생하는 신호 (재고/로그 갱신용)
+    order_changed = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "admin_screen.ui")
@@ -350,11 +352,25 @@ class AdminScreen(QWidget):
         if hasattr(self, "btnCancelSelected"):
             self.btnCancelSelected.clicked.connect(self.on_click_cancel_selected)
 
+        # 주문 변경 신호 연결 (재고/로그 갱신)
+        self.order_changed.connect(self._on_order_changed)
+
         # 초기 로딩
         self.load_materials()
         self.load_machine_status()
         self.load_queue()
         # 재료 트랜잭션 로그 로드
+        try:
+            self.load_material_tx()
+        except Exception:
+            pass
+
+    def _on_order_changed(self):
+        """주문 상태 변경/취소 시 호출되는 슬롯"""
+        try:
+            self.load_materials()
+        except Exception:
+            pass
         try:
             self.load_material_tx()
         except Exception:
@@ -618,9 +634,7 @@ class AdminScreen(QWidget):
             data = resp.json()
             deleted = data.get("deleted_orders")
             QMessageBox.information(self, "완료", f"대기열이 초기화되었습니다. 삭제된 주문: {deleted}")
-            # 로컬 뷰 재로드
-            self.load_queue()
-            # 다른 컴포넌트(예: OrderScreen)에 갱신 알림
+            # Signal emission (timer will auto-refresh)
             try:
                 self.queue_reset.emit()
             except Exception:
@@ -691,22 +705,12 @@ class AdminScreen(QWidget):
         try:
             resp = requests.patch(f"{API_BASE_URL}/api/admin/orders/{order_id}/status", json={"status": new_status}, timeout=10)
             resp.raise_for_status()
-            # 성공 시 이전 값 업데이트 및 관련 뷰 갱신
+            # Success: update previous value
             combo.setProperty("prev", new_status)
-            try:
-                self.load_queue()
-            except Exception:
-                pass
-            try:
-                self.load_materials()
-            except Exception:
-                pass
-            try:
-                self.load_material_tx()
-            except Exception:
-                pass
+            # Timer will auto-refresh, just emit signals
             try:
                 self.queue_reset.emit()
+                self.order_changed.emit()
             except Exception:
                 pass
         except Exception as e:
@@ -766,20 +770,10 @@ class AdminScreen(QWidget):
             resp = requests.patch(f"{API_BASE_URL}/api/orders/{order_id}/status", json={"status": "CANCELED"}, timeout=10)
             resp.raise_for_status()
             QMessageBox.information(self, "완료", "주문이 취소되었습니다.")
-            # 로컬 대기열 뷰 갱신 및 다른 창에 알림
-            self.load_queue()
-            # 재고 뷰를 갱신하여 복구된 수량이 보이도록 함
-            try:
-                self.load_materials()
-            except Exception:
-                pass
-            # 재료 트랜잭션 로그를 갱신하여 RESTOCK 항목이 즉시 보이도록 함
-            try:
-                self.load_material_tx()
-            except Exception:
-                pass
+            # Signal emission (timer will auto-refresh, materials/logs updated)
             try:
                 self.queue_reset.emit()
+                self.order_changed.emit()
             except Exception:
                 pass
         except Exception as e:
