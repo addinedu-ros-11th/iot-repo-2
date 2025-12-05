@@ -90,3 +90,7 @@ def api_get_machine_status(db=Depends(get_db)):
 @app.post("/api/machine/events")
 def api_handle_machine_event(req: models.MachineEventIn, db=Depends(get_db)):
     return machine_service.handle_machine_event(db, req)
+
+@app.get("/api/machine/next-order")
+def api_get_next_order_for_machine(conn=Depends(get_db)):
+    return machine_service.get_next_order_for_machine(conn)

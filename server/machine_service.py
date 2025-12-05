@@ -124,3 +124,27 @@ def handle_machine_event(conn, req: models.MachineEventIn) -> dict[str, Any]:
 
     conn.commit()
     return {"ok": True}
+
+
+from db import order_repo
+from common import enums
+
+def get_next_order_for_machine(conn):
+    """
+    기계가 다음으로 처리할 가장 오래된 대기 주문 1건 반환
+    """
+
+    order = order_repo.get_next_waiting_order(conn)
+
+    if not order:
+        return {
+            "exists": False
+        }
+
+    return {
+        "exists": True,
+        "order_id": order["order_id"],
+        "pickup_no": order["pickup_no"],
+        "total_qty": order["total_qty"],
+        "status": order["status"]
+    }
