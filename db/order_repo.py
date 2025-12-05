@@ -133,3 +133,26 @@ def update_order_status(conn, order_id: int, new_status: str) -> int:
     with conn.cursor() as cur:
         cur.execute(sql, (new_status, order_id))
         return cur.rowcount
+
+def get_next_waiting_order(conn) -> dict | None:
+    """
+    가장 오래된 대기(WAITING) 주문 1건 조회
+    """
+    sql = """
+    SELECT
+        o.id AS order_id,
+        o.pickup_no,
+        o.status,
+        o.ordered_at,
+        COALESCE(SUM(od.qty), 0) AS total_qty
+    FROM orders o
+    LEFT JOIN order_detail od ON o.id = od.order_id
+    WHERE o.status = 'WAITING'
+    GROUP BY o.id, o.pickup_no, o.status, o.ordered_at
+    ORDER BY o.ordered_at ASC
+    LIMIT 1
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        row = cur.fetchone()
+    return row
