@@ -133,7 +133,21 @@ def api_handle_machine_event(req: models.MachineEventIn, db=Depends(get_db)):
     return machine_service.handle_machine_event(db, req)
 
 
-# ===== Fast API 엔드포인트 추가 =====
-@app.get("/api/machine/next-order")
-def api_get_next_order_for_machine():
-    return machine_service.get_next_order_for_machine()
+@app.post("/api/machine/{machine_id}/emergency-stop")
+def api_emergency_stop_machine(machine_id: int, db=Depends(get_db)):
+    """머신 비상정지: 현재 상태를 저장하고 EMERGENCY_STOP 상태로 변경"""
+    try:
+        return machine_service.emergency_stop_machine(db, machine_id)
+    except Exception as e:
+        print(f"[api] 머신 비상정지 실패: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/machine/{machine_id}/restore")
+def api_restore_machine_state(machine_id: int, db=Depends(get_db)):
+    """머신 복구: 비상정지 전 상태로 복구"""
+    try:
+        return machine_service.restore_machine_state(db, machine_id)
+    except Exception as e:
+        print(f"[api] 머신 복구 실패: {e}")
+        raise HTTPException(status_code=400, detail=str(e))

@@ -786,9 +786,127 @@ class AdminScreen(QWidget):
             QMessageBox.critical(self, "오류", f"주문 취소에 실패했습니다:\n{e}")
 
     def on_click_emergency_stop(self):
-        """Show a warning indicating emergency stop was triggered. Actual emergency logic is left unimplemented."""
-        QMessageBox.warning(self, "비상정지", "비상정지가 실행되었습니다. (기능 미구현)")
+        """선택된 머신을 비상정지 상태로 변경."""
+        row = self.machineTable.currentRow()
+        if row is None or row < 0:
+            QMessageBox.warning(self, "알림", "비상정지할 머신을 선택하세요.")
+            return
+
+        # 테이블에서 머신 정보 추출 (ID 컬럼은 없으므로 이름으로 조회)
+        machine_name_item = self.machineTable.item(row, 0)
+        if machine_name_item is None:
+            QMessageBox.warning(self, "알림", "머신 정보를 읽을 수 없습니다.")
+            return
+
+        machine_name = machine_name_item.text()
+        
+        # 현재 상태 확인
+        state_item = self.machineTable.item(row, 1)
+        current_state = state_item.text() if state_item else "UNKNOWN"
+        
+        # 이미 비상정지 상태이면 불필요
+        if current_state == "EMERGENCY_STOP":
+            QMessageBox.information(self, "알림", "이미 비상정지 상태입니다.")
+            return
+        
+        # 확인 대화
+        reply = QMessageBox.question(
+            self,
+            "비상정지 확인",
+            f"머신 '{machine_name}'을 비상정지하시겠습니까?\n현재 상태: {current_state}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # 머신 ID를 얻기 위해 먼저 load_machine_status로 조회된 데이터에서 ID 추출
+        # machineTable에 ID 정보를 속성으로 저장해야 함
+        # 따라서 load_machine_status 수정 필요
+        try:
+            # 선택된 행의 머신 ID 속성 조회
+            machine_id_str = self.machineTable.item(row, 0).text() if hasattr(self, '_machine_ids') else None
+            if not machine_id_str or not hasattr(self, '_machine_ids'):
+                # 머신명으로 직접 조회
+                resp = requests.get(f"{API_BASE_URL}/api/machine/status", timeout=5)
+                resp.raise_for_status()
+                machines = resp.json()
+                machine_id = None
+                for m in machines:
+                    if m.get("name") == machine_name:
+                        machine_id = m.get("id")
+                        break
+                if machine_id is None:
+                    QMessageBox.warning(self, "오류", "머신을 찾을 수 없습니다.")
+                    return
+            else:
+                machine_id = int(machine_id_str)
+            
+            # API 호출
+            resp = requests.post(f"{API_BASE_URL}/api/machine/{machine_id}/emergency-stop", timeout=10)
+            resp.raise_for_status()
+            
+            QMessageBox.information(self, "완료", f"머신 '{machine_name}'을 비상정지했습니다.")
+            # 머신 상태 갱신
+            self.load_machine_status()
+        except Exception as e:
+            print(f"[AdminScreen] 비상정지 실패: {e}")
+            QMessageBox.critical(self, "오류", f"비상정지에 실패했습니다:\n{e}")
 
     def on_click_restart_machine(self):
-        """Show an alert indicating a restart was triggered. Actual restart logic is left unimplemented."""
-        QMessageBox.information(self, "재가동", "머신 재가동이 실행되었습니다. (기능 미구현)")
+        """비상정지된 머신을 이전 상태로 복구."""
+        row = self.machineTable.currentRow()
+        if row is None or row < 0:
+            QMessageBox.warning(self, "알림", "복구할 머신을 선택하세요.")
+            return
+
+        # 테이블에서 머신 정보 추출
+        machine_name_item = self.machineTable.item(row, 0)
+        if machine_name_item is None:
+            QMessageBox.warning(self, "알림", "머신 정보를 읽을 수 없습니다.")
+            return
+
+        machine_name = machine_name_item.text()
+        
+        # 현재 상태 확인
+        state_item = self.machineTable.item(row, 1)
+        current_state = state_item.text() if state_item else "UNKNOWN"
+        
+        # 비상정지 상태가 아니면 불필요
+        if current_state != "EMERGENCY_STOP":
+            QMessageBox.information(self, "알림", "비상정지 상태가 아니므로 복구할 필요가 없습니다.")
+            return
+        
+        # 확인 대화
+        reply = QMessageBox.question(
+            self,
+            "머신 복구 확인",
+            f"머신 '{machine_name}'을 복구하시겠습니까?\n이전 상태로 복구됩니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            # 머신 ID 조회
+            resp_status = requests.get(f"{API_BASE_URL}/api/machine/status", timeout=5)
+            resp_status.raise_for_status()
+            machines = resp_status.json()
+            machine_id = None
+            for m in machines:
+                if m.get("name") == machine_name:
+                    machine_id = m.get("id")
+                    break
+            if machine_id is None:
+                QMessageBox.warning(self, "오류", "머신을 찾을 수 없습니다.")
+                return
+            
+            # API 호출
+            resp = requests.post(f"{API_BASE_URL}/api/machine/{machine_id}/restore", timeout=10)
+            resp.raise_for_status()
+            
+            QMessageBox.information(self, "완료", f"머신 '{machine_name}'을 복구했습니다.")
+            # 머신 상태 갱신
+            self.load_machine_status()
+        except Exception as e:
+            print(f"[AdminScreen] 머신 복구 실패: {e}")
+            QMessageBox.critical(self, "오류", f"머신 복구에 실패했습니다:\n{e}")
