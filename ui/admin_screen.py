@@ -47,6 +47,8 @@ class AdminScreen(QWidget):
     queue_reset = pyqtSignal()
     # 주문 상태 변경/취소 시 발생하는 신호 (재고/로그 갱신용)
     order_changed = pyqtSignal()
+    # 대기열이 갱신되었을 때 주문 화면에 알리는 신호
+    queue_updated = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
         ui_path = os.path.join(os.path.dirname(__file__), "admin_screen.ui")
@@ -614,6 +616,8 @@ class AdminScreen(QWidget):
             
             self.queueTable.resizeRowsToContents()
             self.queueTable.resizeColumnsToContents()
+            # 주문 화면에 대기열 갱신 알림
+            self.queue_updated.emit()
         except Exception as e:
             # 주기적 갱신 중 에러는 조용히 무시하되 로깅
             print(f"[AdminScreen] 대기열 로드 실패: {e}")

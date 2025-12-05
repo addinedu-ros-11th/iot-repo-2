@@ -40,6 +40,12 @@ def main():
         admin_win.order_changed.connect(order_win.load_queue)
     except Exception:
         pass
+    
+    # 관리자 화면의 대기열 갱신 신호를 주문 화면의 로드에 연결 (3초마다 실시간 동기화)
+    try:
+        admin_win.queue_updated.connect(order_win.load_queue)
+    except Exception:
+        pass
 
     sys.exit(app.exec())
 
