@@ -150,3 +150,41 @@ def handle_machine_event(conn, req: models.MachineEventIn) -> dict[str, Any]:
 
     conn.commit()
     return {"ok": True}
+
+def get_next_order_for_machine(conn) -> dict | None:
+    """
+    현재 기계가 처리해야 할 다음 주문 1건 반환
+    기준:
+    - orders.status = 'PENDING'
+    - 가장 먼저 들어온 주문 (ordered_at ASC)
+    """
+
+    sql = """
+    SELECT 
+        o.id AS order_id,
+        o.pickup_no,
+        o.status,
+        o.ordered_at,
+        SUM(od.qty) AS total_qty
+    FROM orders o
+    JOIN order_detail od ON od.order_id = o.id
+    WHERE o.status = 'PENDING'
+    GROUP BY o.id, o.pickup_no, o.status, o.ordered_at
+    ORDER BY o.ordered_at ASC
+    LIMIT 1
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        row = cur.fetchone()
+
+    if not row:
+        return None   # ✅ 주문 없을 때
+
+    return {
+        "order_id": row["order_id"],
+        "pickup_no": row["pickup_no"],
+        "status": row["status"],
+        "total_qty": int(row["total_qty"]),
+        "ordered_at": row["ordered_at"].isoformat() if row["ordered_at"] else None,
+    }
