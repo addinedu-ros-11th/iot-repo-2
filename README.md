@@ -22,13 +22,13 @@ IoT 프로젝트 - 붕어빵 머신 제어 및 주문·재고·머신 상태 관
 - **Frontend UI**: PyQt6 (관리자/주문 화면 이중 창)
 - **Backend API**: FastAPI + Uvicorn
 - **Database**: MySQL (pymysql)
-- **Hardware**: Arduino (머신 제어)
-- **Communication**: Serial (Arduino), REST API (HTTP)
+- **Hardware**: Arduino (머신 제어), RFID Reader (카드 입력)
+- **Communication**: Serial (Arduino/RFID), REST API (HTTP)
 
 ### 주요 특징
-- 실시간 주문 대기열 모니터링 (관리자↔주문 화면 3초 동기화)
-- RFID 카드 기반 주문 입력 (시리얼 직접 연결)
-- 자동 재고 소모 및 관리자 보충 기능
+- 실시간 주문 대기열 동기화 (AdminScreen ↔ OrderScreen 3초마다)
+- RFID 카드 기반 주문 입력 (시리얼 직접 연결, 서버 경유 ❌)
+- 자동 재고 소모 및 관리자 보충/조정 기능
 - 머신 비상정지/재가동 기능
 - 머신 상태/이벤트 실시간 로깅
 
@@ -80,29 +80,32 @@ Serial 연결 (독립적)
 iot-repo-2/
 ├── main.py                      # PyQt 앱 진입점 (UI 창 관리, 신호 연결)
 ├── config.py                    # 환경변수 로드 (.env)
+├── bridge.py                    # API 요청 헬퍼 (requests 래퍼)
 ├── .env                         # 환경설정 (git ignore)
 │
 ├── ui/                          # PyQt6 화면
-│   ├── admin_screen.py          # 관리자 화면 (재고, 주문관리, 머신상태)
-│   ├── admin_screen.ui          # Qt Designer XML 레이아웃
-│   ├── order_screen.py          # 주문 화면 (메뉴, RFID, 대기열)
-│   └── order_screen.ui          # Qt Designer XML 레이아웃
+│   ├── admin_screen.py          # 관리자 화면 (재고, 주문 관리, 머신 상태)
+│   ├── admin_screen.ui          # Qt Designer 레이아웃
+│   ├── admin_screen_ui.py       # admin_screen.ui 컴파일 결과
+│   ├── order_screen.py          # 주문 화면 (메뉴 선택, 대기열)
+│   ├── order_screen.ui          # Qt Designer 레이아웃
+│   └── order_screen_ui.py       # order_screen.ui 컴파일 결과
 │
 ├── server/                      # FastAPI 백엔드
-│   ├── api.py                   # 엔드포인트 정의 (FastAPI)
+│   ├── api.py                   # 엔드포인트 정의
 │   ├── models.py                # Pydantic 요청/응답 모델
 │   ├── order_service.py         # 주문 비즈니스 로직
 │   ├── inventory_service.py     # 재고 비즈니스 로직
 │   └── machine_service.py       # 머신 상태/이벤트 로직
 │
 ├── db/                          # 데이터베이스 레이어
-│   ├── db_conn.py               # DB 연결 헬퍼 (pymysql)
-│   ├── order_repo.py            # 주문 쿼리
-│   ├── inventory_repo.py        # 재고 쿼리
-│   └── machine_repo.py          # 머신 쿼리
+│   ├── db_conn.py               # DB 연결 헬퍼
+│   ├── order_repo.py            # 주문 관련 쿼리
+│   ├── inventory_repo.py        # 재고 관련 쿼리
+│   └── machine_repo.py          # 머신 관련 쿼리
 │
 ├── common/                      # 공통 유틸리티
-│   ├── enums.py                 # 상태/코드 상수
+│   ├── enums.py                 # 상태값/코드 상수
 │   └── timeutils.py             # 시간 변환 유틸
 │
 ├── machine_link/                # Arduino 시리얼 통신
@@ -110,9 +113,12 @@ iot-repo-2/
 │   ├── rfid_reader.py           # RFID 리더 (Qt Thread)
 │   └── msg_parser.py            # 메시지 파싱
 │
-├── arduino/                     # Arduino 스케치
-│   ├── bungeoppang_machine/     # 메인 머신 제어
-│   └── rfid_reader/             # RFID 리더 통신
+├── hw/                          # Arduino 스케치 & 하드웨어
+│   ├── bungeoppang_machine/
+│   │   └── bungeoppang_machine.ino
+│   └── rfid_reader/
+│       ├── README.md
+│       └── rfid_reader.ino
 │
 ├── API_SPEC.md                  # API 상세 명세
 └── DB_SCHEMA.dbml               # DB 스키마 (dbml 형식)
@@ -127,7 +133,7 @@ iot-repo-2/
 #### 필수 요구사항
 - Python 3.10 이상
 - MySQL 8.0 이상
-- Arduino IDE (하드웨어 개발 시)
+- Arduino IDE (하드웨어 연동 시)
 
 #### Python 패키지 설치
 ```bash
@@ -169,6 +175,8 @@ USE fish;
 ```bash
 uvicorn server.api:app --reload --port 8000
 ```
+
+서버가 `http://localhost:8000`에서 실행됩니다.
 
 ### 4. PyQt UI 실행
 
