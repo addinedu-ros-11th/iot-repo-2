@@ -38,3 +38,8 @@ def get_recipe(conn, menu_id: int) -> dict[str, Any]:
         "menu_id": menu_id,
         "materials": rows,
     }
+
+
+def get_material_tx(conn, limit: int = 200) -> list[dict[str, Any]]:
+    rows = inventory_repo.get_material_tx(conn, limit=limit)
+    return rows

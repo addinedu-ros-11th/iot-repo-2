@@ -3,6 +3,7 @@
 """
 
 from typing import Any
+from datetime import datetime
 
 from common import enums
 from db import machine_repo, order_repo
@@ -46,16 +47,54 @@ def get_machine_status(conn) -> list[dict[str, Any]]:
     return rows
 
 
+def emergency_stop_machine(conn, machine_id: int) -> dict[str, Any]:
+    """
+    머신을 비상정지 상태로 변경.
+    """
+    try:
+        sql = "UPDATE machine_status SET state = %s, error_code = %s WHERE id = %s"
+        with conn.cursor() as cur:
+            cur.execute(sql, ("EMERGENCY_STOP", "EMERGENCY_STOP", machine_id))
+            affected = cur.rowcount
+        
+        if affected == 0:
+            raise RuntimeError("MACHINE_NOT_FOUND")
+        
+        conn.commit()
+        return {"ok": True, "message": "머신이 비상정지되었습니다."}
+    except Exception as e:
+        print(f"[machine_service] 비상정지 중 오류: {e}")
+        raise
+
+
+def restore_machine_state(conn, machine_id: int) -> dict[str, Any]:
+    """
+    비상정지된 머신을 IDLE 상태로 복구.
+    """
+    try:
+        sql = "UPDATE machine_status SET state = %s, error_code = %s WHERE id = %s"
+        with conn.cursor() as cur:
+            cur.execute(sql, ("IDLE", "NONE", machine_id))
+            affected = cur.rowcount
+        
+        if affected == 0:
+            raise RuntimeError("MACHINE_NOT_FOUND")
+        
+        conn.commit()
+        return {"ok": True, "message": "머신이 IDLE 상태로 복구되었습니다."}
+    except Exception as e:
+        print(f"[machine_service] 복구 중 오류: {e}")
+        raise
+
+
 def _ensure_machine_id(conn, machine_name: str) -> int:
     """
     machine_status 에서 name 기준으로 id를 얻는다.
-    없으면 기본 상태로 하나 만들어서 id를 반환한다.
     """
     row = machine_repo.get_machine_by_name(conn, machine_name)
     if row is not None:
         return row["id"]
 
-    # 없으면 기본값으로 생성
     default_data = {
         "name": machine_name,
         "state": enums.MACHINE_STATE_IDLE,
@@ -81,17 +120,6 @@ def _ensure_machine_id(conn, machine_name: str) -> int:
 def handle_machine_event(conn, req: models.MachineEventIn) -> dict[str, Any]:
     """
     machine_event INSERT + 주문/머신 상태 반영.
-
-    이벤트 처리 규칙:
-    - ORDER_DONE:
-        해당 order_id 의 상태를 DONE 으로 변경
-    - PICKUP_DETECTED:
-        해당 order_id 의 상태를 PICKED_UP 으로 변경
-    - OVERHEAT:
-        machine_status.error_code = OVERHEAT,
-        machine_status.state = EMERGENCY_STOP
-    - 그 외 이벤트:
-        로그만 남기고 추가 동작 없음
     """
     machine_id = _ensure_machine_id(conn, req.machine_name)
 
@@ -106,14 +134,12 @@ def handle_machine_event(conn, req: models.MachineEventIn) -> dict[str, Any]:
     }
     machine_repo.insert_machine_event(conn, data)
 
-    # 주문 상태 반영
     if req.event_code == enums.EVENT_ORDER_DONE and req.order_id:
         order_repo.update_order_status(conn, req.order_id, enums.ORDER_STATUS_DONE)
 
     elif req.event_code == enums.EVENT_PICKUP_DETECTED and req.order_id:
         order_repo.update_order_status(conn, req.order_id, enums.ORDER_STATUS_PICKED_UP)
 
-    # 머신 에러/비상 정지 반영
     if req.event_code == enums.EVENT_OVERHEAT:
         machine_repo.update_machine_error_state(
             conn,
@@ -124,3 +150,41 @@ def handle_machine_event(conn, req: models.MachineEventIn) -> dict[str, Any]:
 
     conn.commit()
     return {"ok": True}
+
+def get_next_order_for_machine(conn) -> dict | None:
+    """
+    현재 기계가 처리해야 할 다음 주문 1건 반환
+    기준:
+    - orders.status = 'PENDING'
+    - 가장 먼저 들어온 주문 (ordered_at ASC)
+    """
+
+    sql = """
+    SELECT 
+        o.id AS order_id,
+        o.pickup_no,
+        o.status,
+        o.ordered_at,
+        SUM(od.qty) AS total_qty
+    FROM orders o
+    JOIN order_detail od ON od.order_id = o.id
+    WHERE o.status = 'PENDING'
+    GROUP BY o.id, o.pickup_no, o.status, o.ordered_at
+    ORDER BY o.ordered_at ASC
+    LIMIT 1
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        row = cur.fetchone()
+
+    if not row:
+        return None   # ✅ 주문 없을 때
+
+    return {
+        "order_id": row["order_id"],
+        "pickup_no": row["pickup_no"],
+        "status": row["status"],
+        "total_qty": int(row["total_qty"]),
+        "ordered_at": row["ordered_at"].isoformat() if row["ordered_at"] else None,
+    }

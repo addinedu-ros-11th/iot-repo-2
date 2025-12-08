@@ -6,16 +6,48 @@
 import sys
 
 from PyQt6.QtWidgets import QApplication
-from ui.kiosk_app import KioskApp
+from ui.admin_screen import AdminScreen
+from ui.order_screen import OrderScreen
 
 
 def main():
     app = QApplication(sys.argv)
 
-    window = KioskApp()
-    window.show()
+    # Admin 및 Order 화면을 각각의 창으로 엶
+    admin_win = AdminScreen()
+    admin_win.show()
 
-    sys.exit(app.exec_())
+    order_win = OrderScreen()
+    order_win.show()
+    # Admin의 초기화 신호를 Order 화면의 로드에 연결하여 동기화 유지
+    try:
+        admin_win.queue_reset.connect(order_win.load_queue)
+    except Exception:
+        pass
+
+    # 주문 생성 신호를 Admin의 재고 로드에 연결하여 소모된 재고가 Admin UI에 반영되도록 함
+    try:
+        order_win.order_created.connect(admin_win.load_materials)
+    except Exception:
+        pass
+    try:
+        order_win.order_created.connect(admin_win.load_material_tx)
+    except Exception:
+        pass
+    
+    # 주문 상태 변경/취소 시 OrderScreen도 대기열 갱신하도록 연결
+    try:
+        admin_win.order_changed.connect(order_win.load_queue)
+    except Exception:
+        pass
+    
+    # 관리자 화면의 대기열 갱신 신호를 주문 화면의 로드에 연결 (3초마다 실시간 동기화)
+    try:
+        admin_win.queue_updated.connect(order_win.load_queue)
+    except Exception:
+        pass
+
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

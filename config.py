@@ -35,3 +35,7 @@ API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:8000")
 # ==== Arduino 시리얼 ====
 SERIAL_PORT: str = os.getenv("SERIAL_PORT", "/dev/ttyACM0")
 SERIAL_BAUDRATE: int = int(os.getenv("SERIAL_BAUDRATE", "115200"))
+
+# ==== RFID 리더 ====
+RFID_PORT: str = os.getenv("RFID_PORT", "/dev/ttyUSB0")
+RFID_BAUDRATE: int = int(os.getenv("RFID_BAUDRATE", "9600"))

@@ -4,11 +4,11 @@ DB 접근은 db/order_repo.py 만 사용해야 한다.
 """
 
 from typing import Any
-
+from datetime import datetime
 from common import enums
 from db import order_repo
+from db import inventory_repo
 from server import models
-
 
 def get_menu_list(conn) -> list[dict[str, Any]]:
     """
@@ -30,8 +30,8 @@ def get_menu_list(conn) -> list[dict[str, Any]]:
       ...
     ]
     """
-    # TODO
-    raise NotImplementedError("get_menu_list 구현 필요")
+    # DB에서 메뉴 목록을 그대로 조회해서 반환
+    return order_repo.get_menu_list(conn)
 
 
 def create_order(conn, req: models.OrderCreate) -> dict[str, Any]:
@@ -69,8 +69,74 @@ def create_order(conn, req: models.OrderCreate) -> dict[str, Any]:
     예외 처리:
     - order 삽입 후 get_order_by_id 결과가 None 이면 RuntimeError("ORDER_INSERT_FAILED") 발생
     """
-    # TODO
-    raise NotImplementedError("create_order 구현 필요")
+    # 1) 다음 pickup_no 계산
+    pickup_no = order_repo.get_next_pickup_no_for_today(conn)
+
+    # 2) orders INSERT
+    order_id = order_repo.insert_order(
+      conn,
+      pickup_no=pickup_no,
+      rfid_card_id=req.rfid_card_id,
+      status=enums.ORDER_STATUS_PENDING,
+    )
+
+    # 3) order_detail INSERT
+    items = [(item.menu_id, item.qty) for item in req.items]
+    if items:
+      order_repo.insert_order_items(conn, order_id, items)
+
+    # 3.1) 재고 차감 처리: 메뉴 레시피(material_recipe)를 참고해서 재료 사용량 집계
+    # 각 메뉴별로 recipe를 조회하고, material_id 별 총 사용량을 계산하여 재고를 차감한다.
+    # inventory_repo.get_recipe_by_menu(conn, menu_id) 를 사용
+    # inventory_repo.insert_material_tx(conn, material_id, tx_type, qty_change, note)
+    # inventory_repo.update_material_stock(conn, material_id, qty_change)
+    try:
+      # material_id별 사용량을 집계
+      material_usage: dict[int, int] = {}
+      for menu_id, qty in items:
+        if qty <= 0:
+          continue
+        recipe_rows = inventory_repo.get_recipe_by_menu(conn, menu_id)
+        for r in recipe_rows:
+          mid = int(r.get("material_id"))
+          use_per_one = int(r.get("use_per_one") or 0)
+          total_use = use_per_one * int(qty)
+          if total_use == 0:
+            continue
+          material_usage[mid] = material_usage.get(mid, 0) + total_use
+
+        # 재료 트랜잭션과 재고 업데이트 적용
+        for material_id, total in material_usage.items():
+            # qty_change는 소비의 경우 음수임
+            qty_change = -int(total)
+            note = f"Order:{order_id}"
+            # 트랜잭션 기록 (order_id 포함)
+            inventory_repo.insert_material_tx(conn, material_id, "CONSUME", qty_change, note, order_id)
+            # 재고 갱신 (재고 부족 시 ValueError 발생)
+            inventory_repo.update_material_stock(conn, material_id, qty_change)
+    except ValueError as e:
+        # 재고 부족 시 명확한 메시지와 함께 예외 발생
+        print(f"[OrderService] 재고 부족으로 주문 생성 실패: {e}")
+        raise ValueError(f"INSUFFICIENT_STOCK: {str(e)}")
+    except Exception as e:
+        # 재고 업데이트에 실패하면 예외를 발생시켜 주문 생성 전체를 롤백함
+        print(f"[OrderService] 주문 생성 중 재고 처리 실패: {e}")
+        raise    # 4) commit
+    conn.commit()
+
+    # 5) 조회
+    row = order_repo.get_order_by_id(conn, order_id)
+    if row is None:
+      raise RuntimeError("ORDER_INSERT_FAILED")
+
+    # 6) 반환 형식
+    ordered_at = row.get("ordered_at")
+    return {
+      "order_id": row["order_id"],
+      "pickup_no": row["pickup_no"],
+      "status": row["status"],
+      "ordered_at": row["ordered_at"].isoformat() if row["ordered_at"] is not None else None,
+    }
 
 
 def get_order_queue(conn) -> list[dict[str, Any]]:
@@ -107,8 +173,32 @@ def get_order_queue(conn) -> list[dict[str, Any]]:
 
     ※ ordered_at 이 None 이 아니면 row["ordered_at"].isoformat() 으로 문자열 변환.
     """
-    # TODO
-    raise NotImplementedError("get_order_queue 구현 필요")
+    rows = order_repo.get_order_queue_with_cook_time(conn)
+
+    result: list[dict[str, Any]] = []
+    accumulated = 0
+    for row in rows:
+      status = row.get("status")
+      cook_time = int(row.get("cook_time_total_sec") or 0)
+
+      if status in (enums.ORDER_STATUS_PENDING, enums.ORDER_STATUS_COOKING):
+        eta_sec = accumulated
+        accumulated += cook_time
+      else:  # DONE or others
+        eta_sec = 0
+
+      ordered_at = row.get("ordered_at")
+      result.append(
+        {
+          "order_id": row.get("order_id"),
+          "pickup_no": row.get("pickup_no"),
+          "status": status,
+          "ordered_at": row["ordered_at"].isoformat() if row["ordered_at"] is not None else None,
+          "eta_sec": int(eta_sec),
+        }
+      )
+
+    return result
 
 
 def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
@@ -137,5 +227,95 @@ def update_order_status(conn, order_id: int, new_status: str) -> dict[str, Any]:
         "ordered_at": "<ISO8601 문자열 또는 None>"
       }
     """
-    # TODO
-    raise NotImplementedError("update_order_status 구현 필요")
+    # 1) 현재 주문 조회
+    row = order_repo.get_order_by_id(conn, order_id)
+    if row is None:
+      raise ValueError("ORDER_NOT_FOUND")
+
+    # 2) 허용된 상태 확인 (이 함수는 취소만 처리)
+    if new_status != enums.ORDER_STATUS_CANCELED:
+      raise ValueError("UNSUPPORTED_STATUS_CHANGE")
+
+    # 3) 현재 상태가 PENDING인지 확인
+    current_status = row.get("status")
+    if current_status != enums.ORDER_STATUS_PENDING:
+      raise ValueError("CANNOT_CANCEL_NON_PENDING")
+
+    # 4) 환불(재고 복구): 주문의 order_detail을 읽어 각 메뉴별 수량에 따라
+    #    material_recipe를 참고해 material별 복구 수량을 계산하고 재고를 증가시킨다.
+    #    모든 작업은 같은 트랜잭션에서 일어나므로 실패 시 롤백된다.
+    if new_status == enums.ORDER_STATUS_CANCELED:
+      # 주문된 항목 불러오기
+      items = order_repo.get_order_items(conn, order_id)
+      # 재료 사용량 집계
+      material_usage: dict[int, int] = {}
+      for it in items:
+        menu_id = int(it.get("menu_id") or 0)
+        qty = int(it.get("qty") or 0)
+        if qty <= 0:
+          continue
+        recipe_rows = inventory_repo.get_recipe_by_menu(conn, menu_id)
+        for r in recipe_rows:
+          mid = int(r.get("material_id"))
+          use_per_one = int(r.get("use_per_one") or 0)
+          total_use = use_per_one * qty
+          if total_use == 0:
+            continue
+          material_usage[mid] = material_usage.get(mid, 0) + total_use
+
+      # 각 재료에 대해 재고 복구를 적용함 (qty_change는 양수)
+      for material_id, total in material_usage.items():
+        qty_change = int(total)
+        note = f"CancelOrder:{order_id}"
+        try:
+          # 취소 시 RESTOCK 트랜잭션을 기록하여 재고를 복구함 (order_id 포함)
+          inventory_repo.insert_material_tx(conn, material_id, "RESTOCK", qty_change, note, order_id)
+          # 사용된 양을 더하여 재고를 갱신함
+          inventory_repo.update_material_stock(conn, material_id, qty_change)
+        except Exception as e:
+          print(f"[OrderService] 주문 취소 중 재고 복구 실패 (material_id={material_id}): {e}")
+          # 재고 복구 실패 시에도 예외를 발생시켜 트랜잭션 롤백
+          raise
+
+    # 5) 상태 변경
+    affected = order_repo.update_order_status(conn, order_id, new_status)
+    if affected == 0:
+      raise RuntimeError("ORDER_STATUS_UPDATE_FAILED")
+
+    # 6) commit
+    conn.commit()
+
+    # 7) 반환
+    ordered_at = row.get("ordered_at")
+    return {
+      "order_id": row.get("order_id"),
+      "pickup_no": row.get("pickup_no"),
+      "status": new_status,
+      "ordered_at": row.get("ordered_at").isoformat() if row.get("ordered_at") is not None else None,
+    }
+
+
+def reset_order_queue(conn) -> dict[str, Any]:
+    """
+    대기열 초기화: DB에서 PENDING/COOKING/DONE 상태의 주문(및 상세)을 제거하고 삭제된 수를 반환.
+    """
+    deleted = order_repo.reset_order_queue(conn)
+    conn.commit()
+    return {"deleted_orders": int(deleted)}
+
+def get_order_for_machine(conn, order_id: int) -> dict:
+    order = order_repo.get_order_by_id(conn, order_id)
+    if not order:
+        raise ValueError("ORDER_NOT_FOUND")
+    total_qty = order_repo.get_total_qty_by_order_id(conn, order_id)
+    # 2플레이트 기준 자동 분배
+    plate1 = total_qty // 2
+    plate2 = total_qty - plate1
+    return {
+        "order_id": order["order_id"],
+        "pickup_no": order["pickup_no"],
+        "total_qty": total_qty,
+        "plate1_qty": plate1,
+        "plate2_qty": plate2,
+        "status": order["status"]
+    }

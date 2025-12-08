@@ -1,4 +1,4 @@
-# db/order_repo.py
+# db/order_repo.py - 메뉴/주문 관련 DB 접근 함수 모음
 """
 menu, orders, order_detail 관련 DB 접근 함수.
 비즈니스 로직은 server/order_service.py 에서 처리한다.
@@ -95,6 +95,29 @@ def get_order_by_id(conn, order_id: int) -> dict | None:
     return row
 
 
+def get_order_items(conn, order_id: int) -> list[dict[str, Any]]:
+    """
+    주어진 order_id의 order_detail 항목들을 반환.
+    각각의 row는 {'menu_id': int, 'qty': int} 형태를 가짐.
+    """
+    sql = """
+    SELECT menu_id, qty
+    FROM order_detail
+    WHERE order_id = %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (order_id,))
+        rows = cur.fetchall()
+    # menu_id와 qty 키를 가진 dict 형태로 정규화
+    result = []
+    for r in rows:
+        if isinstance(r, dict):
+            result.append({"menu_id": r.get("menu_id"), "qty": r.get("qty")})
+        else:
+            result.append({"menu_id": r[0], "qty": r[1]})
+    return result
+
+
 def get_order_queue_with_cook_time(conn) -> list[dict[str, Any]]:
     """
     대기열/진행중/완료(픽업 전) 주문의 총 조리시간까지 함께 조회.
@@ -133,3 +156,47 @@ def update_order_status(conn, order_id: int, new_status: str) -> int:
     with conn.cursor() as cur:
         cur.execute(sql, (new_status, order_id))
         return cur.rowcount
+
+
+def reset_order_queue(conn) -> int:
+    """
+    대기열(미완료) 주문들을 삭제한다.
+    - 대상 상태: PENDING, COOKING, DONE
+    - order_detail 먼저 삭제한 후 orders 삭제
+    반환값: 삭제된 orders 수
+    """
+    # 먼저 대상 주문 id 리스트 조회
+    sql_select = """
+    SELECT id FROM orders
+    WHERE status IN ('PENDING', 'COOKING', 'DONE')
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql_select)
+        rows = cur.fetchall()
+        ids = [r["id"] if isinstance(r, dict) and "id" in r else (r[0] if isinstance(r, (list, tuple)) else None) for r in rows]
+
+        if not ids:
+            return 0
+
+        # order_detail 항목을 삭제
+        placeholders = ",".join(["%s"] * len(ids))
+        sql_delete_details = f"DELETE FROM order_detail WHERE order_id IN ({placeholders})"
+        cur.execute(sql_delete_details, ids)
+
+        # orders 항목을 삭제
+        sql_delete_orders = f"DELETE FROM orders WHERE id IN ({placeholders})"
+        cur.execute(sql_delete_orders, ids)
+        deleted = cur.rowcount
+
+    return deleted
+
+def get_total_qty_by_order_id(conn, order_id: int) -> int:
+    sql = """
+    SELECT COALESCE(SUM(qty), 0) AS total_qty
+    FROM order_detail
+    WHERE order_id = %s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (order_id,))
+        row = cur.fetchone()
+        return row["total_qty"]
